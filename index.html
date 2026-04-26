@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>D&D Club Session Organizer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <button class="brand" data-view="home" type="button" aria-label="Go home">
+          <span class="brand-mark">d20</span>
+          <span>
+            <strong>D&D Club</strong>
+            <small>Session Organizer</small>
+          </span>
+        </button>
+        <nav class="nav-tabs" aria-label="Main sections">
+          <button class="nav-tab active" data-view="home" type="button">Home</button>
+          <button class="nav-tab" data-view="roster" type="button">Roster</button>
+          <button class="nav-tab" data-view="initiative" type="button">Battle</button>
+          <button class="nav-tab" data-view="sessions" type="button">Sessions</button>
+          <button class="nav-tab" data-view="speaking" type="button">Speaking Time</button>
+          <button class="nav-tab" data-view="progress" type="button">Session Notes</button>
+        </nav>
+      </header>
+
+      <main>
+        <section class="view active" id="view-home" aria-labelledby="home-title">
+          <div class="hero">
+            <div>
+              <p class="eyebrow">Tabletop command center</p>
+              <h1 id="home-title">D&D Club Campaign</h1>
+              <p class="hero-copy">
+                Track members, run battles faster, and build the story across every campaign session.
+              </p>
+            </div>
+            <div class="hero-stats">
+              <div class="hero-stat">
+                <strong id="hero-member-count">0</strong>
+                <span>characters</span>
+              </div>
+              <div class="hero-stat">
+                <strong id="hero-dm-count">0</strong>
+                <span>dungeon masters</span>
+              </div>
+              <div class="hero-stat text-stat">
+                <strong id="hero-campaign-name">No campaign</strong>
+                <span>active campaign</span>
+              </div>
+              <div class="hero-stat">
+                <strong id="hero-session-count">0</strong>
+                <span>sessions</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="feature-grid">
+            <button class="feature-card ready" data-view="roster" type="button">
+              <span class="card-kicker">Feature 1</span>
+              <strong>Member Roster</strong>
+              <span>Add player characters and Dungeon Masters.</span>
+            </button>
+            <button class="feature-card ready" data-view="initiative" type="button">
+              <span class="card-kicker">Feature 2</span>
+              <strong>Battle Manager</strong>
+              <span>Select combatants, track AC/health, resolve attacks, and save results.</span>
+            </button>
+            <button class="feature-card planned" data-view="speaking" type="button">
+              <span class="card-kicker">Feature 3</span>
+              <strong>Speaking Time</strong>
+              <span>Record session audio and manually enter minutes now; charts come later.</span>
+            </button>
+            <button class="feature-card planned" data-view="progress" type="button">
+              <span class="card-kicker">Feature 4</span>
+              <strong>Session Progress</strong>
+              <span>Write transcripts and recaps now; AI summaries come later.</span>
+            </button>
+          </div>
+        </section>
+
+        <section class="view" id="view-roster" aria-labelledby="roster-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Feature 1</p>
+              <h2 id="roster-title">Member Roster</h2>
+            </div>
+            <p>Player characters become selectable combatants, while Dungeon Masters shape the campaign title.</p>
+          </div>
+
+          <div class="roster-layout">
+            <form class="panel form-panel" id="member-form">
+              <h3 id="member-form-title">Add a player character</h3>
+              <input type="hidden" id="member-id" />
+              <label>
+                Player name
+                <input id="player-name" autocomplete="off" required />
+              </label>
+              <label>
+                Character name
+                <input id="character-name" autocomplete="off" required />
+              </label>
+              <label>
+                Character race
+                <input id="character-race" autocomplete="off" required />
+              </label>
+              <label>
+                Armor Class
+                <input id="armor-class" type="number" min="1" autocomplete="off" required />
+              </label>
+              <label>
+                Max Health
+                <input id="max-health" type="number" min="1" autocomplete="off" required />
+              </label>
+              <div class="voice-placeholder">
+                <span>Demo voice</span>
+                <strong>Phase 2</strong>
+              </div>
+              <button class="ghost-button" type="button" disabled>Record demo voice later</button>
+              <div class="button-row">
+                <button class="primary-button" type="submit">Save member</button>
+                <button class="secondary-button hidden" id="cancel-edit" type="button">Cancel edit</button>
+              </div>
+            </form>
+
+            <form class="panel form-panel" id="dm-form">
+              <h3 id="dm-form-title">Add a Dungeon Master</h3>
+              <input type="hidden" id="dm-id" />
+              <label>
+                DM name
+                <input id="dm-name" autocomplete="off" required />
+              </label>
+              <div class="voice-placeholder">
+                <span>Demo voice</span>
+                <strong>Phase 2</strong>
+              </div>
+              <button class="ghost-button" type="button" disabled>Record demo voice later</button>
+              <div class="button-row">
+                <button class="primary-button" type="submit">Save DM</button>
+                <button class="secondary-button hidden" id="cancel-dm-edit" type="button">Cancel edit</button>
+              </div>
+            </form>
+
+            <div class="panel">
+              <div class="panel-title-row">
+                <h3>Player characters</h3>
+                <span id="roster-count" class="count-pill">0 saved</span>
+              </div>
+              <div class="empty-state" id="roster-empty">
+                Add your first player character to begin building the club roster.
+              </div>
+              <div class="member-list" id="member-list"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-title-row">
+                <h3>Dungeon Masters</h3>
+                <span id="dm-count" class="count-pill">0 saved</span>
+              </div>
+              <div class="empty-state" id="dm-empty">
+                Add a Dungeon Master to personalize the campaign title.
+              </div>
+              <div class="member-list" id="dm-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-initiative" aria-labelledby="initiative-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Feature 2</p>
+              <h2 id="initiative-title">Battle Manager</h2>
+            </div>
+            <p>Build an encounter, enter turn-order rolls, resolve attacks, track health, and save battle results.</p>
+          </div>
+
+          <div class="initiative-layout">
+            <div class="panel">
+              <h3>1. Choose characters</h3>
+              <div class="empty-state" id="combat-roster-empty">
+                Add roster members with Armor Class and Health before selecting characters for battle.
+              </div>
+              <div class="check-list" id="combat-member-options"></div>
+            </div>
+
+            <div class="panel">
+              <h3>2. Add monsters</h3>
+              <form class="monster-form" id="monster-form">
+                <label>
+                  Monster type
+                  <input id="monster-type" autocomplete="off" placeholder="Goblin" />
+                </label>
+                <label>
+                  Count
+                  <input id="monster-count" type="number" min="1" max="99" value="1" />
+                </label>
+                <label>
+                  Armor Class
+                  <input id="monster-armor-class" type="number" min="1" value="10" />
+                </label>
+                <label>
+                  Health
+                  <input id="monster-health" type="number" min="1" value="10" />
+                </label>
+                <button class="secondary-button" type="submit">Add monsters</button>
+              </form>
+              <div class="monster-list" id="monster-list"></div>
+            </div>
+
+            <div class="panel wide-panel">
+              <div class="panel-title-row">
+                <h3>3. Enter turn order</h3>
+                <div class="button-row compact">
+                  <button class="secondary-button" id="auto-roll-initiative" type="button">Auto roll d20</button>
+                  <button class="secondary-button" id="sort-initiative" type="button">Sort order</button>
+                  <button class="ghost-button" id="reset-combat" type="button">Reset battle</button>
+                </div>
+              </div>
+              <div class="empty-state" id="combatants-empty">
+                Select characters or add monsters to build the battle order.
+              </div>
+              <div class="turn-table" id="combatant-list"></div>
+            </div>
+
+            <div class="panel wide-panel active-turn-panel">
+              <div>
+                <p class="eyebrow">Current turn</p>
+                <h3 id="current-turn">No active battle</h3>
+                <p id="turn-detail">Sort the battle order to begin.</p>
+              </div>
+              <button class="primary-button next-button" id="start-initiative" type="button">Start Battle</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-sessions" aria-labelledby="sessions-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Campaign records</p>
+              <h2 id="sessions-title">Campaigns & Sessions</h2>
+            </div>
+            <p>Sessions are saved under the active campaign so the campaign story can grow over time.</p>
+          </div>
+
+          <div class="two-column">
+            <form class="panel form-panel" id="campaign-form">
+              <h3 id="campaign-form-title">Create a campaign</h3>
+              <input type="hidden" id="campaign-id" />
+              <label>
+                Campaign name
+                <input id="campaign-name" autocomplete="off" required placeholder="The Sunken Keep" />
+              </label>
+              <div class="button-row">
+                <button class="primary-button" type="submit">Save campaign</button>
+                <button class="secondary-button hidden" id="cancel-campaign-edit" type="button">Cancel edit</button>
+              </div>
+            </form>
+
+            <form class="panel form-panel" id="session-form">
+              <h3>Start a session</h3>
+              <p class="form-note" id="active-campaign-note">Create a campaign first.</p>
+              <label>
+                Date
+                <input id="session-date" type="date" required />
+              </label>
+              <button class="primary-button" type="submit">Create session</button>
+            </form>
+
+            <div class="panel">
+              <div class="panel-title-row">
+                <h3>Campaigns</h3>
+                <span id="campaign-count" class="count-pill">0 saved</span>
+              </div>
+              <div class="empty-state" id="campaigns-empty">
+                Create a campaign before saving sessions.
+              </div>
+              <div class="session-list" id="campaign-list"></div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-title-row">
+                <h3>Sessions in active campaign</h3>
+                <span id="session-count" class="count-pill">0 saved</span>
+              </div>
+              <div class="empty-state" id="sessions-empty">
+                Create a session to start saving campaign records.
+              </div>
+              <div class="session-list" id="session-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-speaking" aria-labelledby="speaking-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Feature 3 - Phase 2A</p>
+              <h2 id="speaking-title">Speaking Time</h2>
+            </div>
+            <p id="speaking-session-context">Select or create a session to record audio and enter manual speaking time.</p>
+          </div>
+
+          <div class="two-column">
+            <div class="panel form-panel">
+              <h3>Session recording</h3>
+              <p class="form-note">
+                Audio is recorded locally. Download it after recording and keep the file until backend upload is added.
+              </p>
+              <div class="recording-status">
+                <span>Status</span>
+                <strong id="recording-status">No recording</strong>
+              </div>
+              <div class="recording-status">
+                <span>Duration</span>
+                <strong id="recording-duration">0:00</strong>
+              </div>
+              <div class="button-row">
+                <button class="primary-button" id="start-recording" type="button">Start recording</button>
+                <button class="secondary-button" id="stop-recording" type="button" disabled>Stop recording</button>
+              </div>
+              <a class="download-button hidden" id="download-recording" href="#" download>Download audio</a>
+              <p class="form-note" id="recording-message"></p>
+            </div>
+
+            <div class="panel">
+              <div class="panel-title-row">
+                <h3>Manual speaking time</h3>
+                <span class="count-pill" id="speaker-count">0 speakers</span>
+              </div>
+              <p class="form-note">
+                Manual minutes are temporary until AI speaker recognition is added. Graphs are not available yet, but saved minutes will be used for future charts.
+              </p>
+              <div class="empty-state" id="speaker-empty">
+                Add player characters or Dungeon Masters to enter speaking time.
+              </div>
+              <div class="speaker-list" id="speaker-list"></div>
+              <button class="primary-button" id="save-speaker-stats" type="button">Save speaking time</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-progress" aria-labelledby="progress-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Feature 4 - Phase 2B</p>
+              <h2 id="progress-title">Session Progress Notes</h2>
+            </div>
+            <p id="progress-session-context">Select or create a session to write manual transcripts, recaps, and campaign notes.</p>
+          </div>
+
+          <div class="progress-layout">
+            <form class="panel progress-form" id="progress-form">
+              <h3>Current session notes</h3>
+              <p class="form-note">
+                These notes are manual for now. AI transcription and summarization are planned for Phase 2C.
+              </p>
+              <label>
+                Full transcript
+                <textarea id="transcript-field" rows="8" placeholder="Paste or type the session transcript here."></textarea>
+              </label>
+              <label>
+                Session recap
+                <textarea id="recap-summary-field" rows="4" placeholder="Summarize what happened this session."></textarea>
+              </label>
+              <label>
+                Important events
+                <textarea id="recap-events-field" rows="3" placeholder="Major moments, discoveries, battles, and choices."></textarea>
+              </label>
+              <label>
+                NPCs
+                <textarea id="recap-npcs-field" rows="3" placeholder="NPCs met, changed, helped, or angered."></textarea>
+              </label>
+              <label>
+                Locations
+                <textarea id="recap-locations-field" rows="3" placeholder="Places visited or mentioned."></textarea>
+              </label>
+              <label>
+                Quests
+                <textarea id="recap-quests-field" rows="3" placeholder="Active, completed, or newly discovered quests."></textarea>
+              </label>
+              <label>
+                Unresolved threads
+                <textarea id="recap-threads-field" rows="3" placeholder="Mysteries, cliffhangers, promises, and loose ends."></textarea>
+              </label>
+              <button class="primary-button" type="submit">Save session notes</button>
+            </form>
+
+            <div class="panel campaign-story-panel">
+              <div class="panel-title-row">
+                <h3>Campaign story</h3>
+                <span class="count-pill" id="story-session-count">0 sessions</span>
+              </div>
+              <div class="empty-state" id="campaign-story-empty">
+                Add session recaps to build the campaign story.
+              </div>
+              <div class="campaign-story-list" id="campaign-story-list"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <section class="initiative-screen hidden" id="initiative-screen" aria-labelledby="initiative-screen-title">
+      <div class="initiative-screen-card">
+        <div class="initiative-screen-top">
+          <div>
+            <p class="eyebrow">Battle in progress</p>
+            <h2 id="initiative-screen-title">No active turn</h2>
+            <p id="initiative-screen-detail">Start battle from the tracker.</p>
+          </div>
+          <button class="ghost-button" id="exit-initiative-screen" type="button">End Battle</button>
+        </div>
+        <div class="initiative-screen-body">
+          <div class="turn-focus">
+            <span id="initiative-screen-roll">Roll --</span>
+            <strong id="initiative-screen-name">No combatant</strong>
+            <small id="initiative-screen-type">Waiting for battle</small>
+            <div class="battle-focus-stats" id="battle-focus-stats"></div>
+          </div>
+          <div class="panel initiative-order-panel">
+            <h3>Turn order</h3>
+            <div class="screen-order-list" id="initiative-screen-order"></div>
+          </div>
+        </div>
+        <div class="battle-screen-grid">
+          <div class="panel">
+            <h3>Battle status</h3>
+            <div class="battle-status-list" id="battle-status-list"></div>
+          </div>
+          <div class="panel battle-action-panel">
+            <h3>Turn action</h3>
+            <p class="form-note" id="battle-action-message">Choose an action for the active combatant.</p>
+            <div class="button-row compact" id="battle-action-buttons">
+              <button class="secondary-button" id="battle-attack" type="button">Attack</button>
+              <button class="secondary-button" id="battle-multi-attack" type="button">Multi-attack</button>
+              <button class="ghost-button" id="battle-other" type="button">Other</button>
+            </div>
+            <div class="battle-target-list" id="battle-target-list"></div>
+            <div class="button-row compact hidden" id="battle-result-buttons">
+              <button class="secondary-button" id="battle-pass" type="button">Pass</button>
+              <button class="secondary-button" id="battle-fail" type="button">Fail</button>
+              <button class="secondary-button" id="battle-spell" type="button">Spell</button>
+            </div>
+            <div class="button-row compact hidden" id="battle-spell-save-buttons">
+              <button class="secondary-button" id="spell-save-pass" type="button">Pass spell save</button>
+              <button class="secondary-button" id="spell-save-fail" type="button">Fail spell save</button>
+            </div>
+            <form class="damage-form hidden" id="damage-form">
+              <label>
+                Damage
+                <input id="damage-amount" type="number" min="0" value="0" />
+              </label>
+              <button class="primary-button" type="submit">Apply damage</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <script src="app.js"></script>
+  </body>
+</html>

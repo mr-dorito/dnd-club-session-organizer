@@ -1,0 +1,1639 @@
+const STORAGE_KEY = "dnd-club-organizer-state";
+
+const initialState = {
+  members: [],
+  dms: [],
+  campaigns: [],
+  sessions: [],
+  currentCampaignId: null,
+  currentSessionId: null,
+  combat: {
+    selectedMemberIds: [],
+    monsters: [],
+    combatants: [],
+    activeIndex: 0,
+    sorted: false,
+    startedAt: null,
+    actions: [],
+    battleRunning: false,
+    actionMode: "idle",
+    selectedTargetId: null,
+    selectedTargetIds: [],
+    pendingDamageTargets: [],
+  },
+};
+
+let state = loadState();
+let mediaRecorder = null;
+let recordingChunks = [];
+let recordingStartedAt = null;
+let recordingTimerId = null;
+let recordingDownloadUrl = null;
+
+const elements = {
+  views: document.querySelectorAll(".view"),
+  navButtons: document.querySelectorAll("[data-view]"),
+  homeTitle: document.querySelector("#home-title"),
+  heroMemberCount: document.querySelector("#hero-member-count"),
+  heroDmCount: document.querySelector("#hero-dm-count"),
+  heroCampaignName: document.querySelector("#hero-campaign-name"),
+  heroSessionCount: document.querySelector("#hero-session-count"),
+  memberForm: document.querySelector("#member-form"),
+  memberFormTitle: document.querySelector("#member-form-title"),
+  memberId: document.querySelector("#member-id"),
+  playerName: document.querySelector("#player-name"),
+  characterName: document.querySelector("#character-name"),
+  characterRace: document.querySelector("#character-race"),
+  armorClass: document.querySelector("#armor-class"),
+  maxHealth: document.querySelector("#max-health"),
+  cancelEdit: document.querySelector("#cancel-edit"),
+  dmForm: document.querySelector("#dm-form"),
+  dmFormTitle: document.querySelector("#dm-form-title"),
+  dmId: document.querySelector("#dm-id"),
+  dmName: document.querySelector("#dm-name"),
+  cancelDmEdit: document.querySelector("#cancel-dm-edit"),
+  rosterCount: document.querySelector("#roster-count"),
+  rosterEmpty: document.querySelector("#roster-empty"),
+  memberList: document.querySelector("#member-list"),
+  dmCount: document.querySelector("#dm-count"),
+  dmEmpty: document.querySelector("#dm-empty"),
+  dmList: document.querySelector("#dm-list"),
+  combatRosterEmpty: document.querySelector("#combat-roster-empty"),
+  combatMemberOptions: document.querySelector("#combat-member-options"),
+  monsterForm: document.querySelector("#monster-form"),
+  monsterType: document.querySelector("#monster-type"),
+  monsterCount: document.querySelector("#monster-count"),
+  monsterArmorClass: document.querySelector("#monster-armor-class"),
+  monsterHealth: document.querySelector("#monster-health"),
+  monsterList: document.querySelector("#monster-list"),
+  combatantsEmpty: document.querySelector("#combatants-empty"),
+  combatantList: document.querySelector("#combatant-list"),
+  autoRollInitiative: document.querySelector("#auto-roll-initiative"),
+  sortInitiative: document.querySelector("#sort-initiative"),
+  resetCombat: document.querySelector("#reset-combat"),
+  currentTurn: document.querySelector("#current-turn"),
+  turnDetail: document.querySelector("#turn-detail"),
+  startInitiative: document.querySelector("#start-initiative"),
+  initiativeScreen: document.querySelector("#initiative-screen"),
+  initiativeScreenTitle: document.querySelector("#initiative-screen-title"),
+  initiativeScreenDetail: document.querySelector("#initiative-screen-detail"),
+  initiativeScreenRoll: document.querySelector("#initiative-screen-roll"),
+  initiativeScreenName: document.querySelector("#initiative-screen-name"),
+  initiativeScreenType: document.querySelector("#initiative-screen-type"),
+  initiativeScreenOrder: document.querySelector("#initiative-screen-order"),
+  exitInitiativeScreen: document.querySelector("#exit-initiative-screen"),
+  battleFocusStats: document.querySelector("#battle-focus-stats"),
+  battleStatusList: document.querySelector("#battle-status-list"),
+  battleActionMessage: document.querySelector("#battle-action-message"),
+  battleActionButtons: document.querySelector("#battle-action-buttons"),
+  battleAttack: document.querySelector("#battle-attack"),
+  battleMultiAttack: document.querySelector("#battle-multi-attack"),
+  battleOther: document.querySelector("#battle-other"),
+  battleTargetList: document.querySelector("#battle-target-list"),
+  battleResultButtons: document.querySelector("#battle-result-buttons"),
+  battlePass: document.querySelector("#battle-pass"),
+  battleFail: document.querySelector("#battle-fail"),
+  battleSpell: document.querySelector("#battle-spell"),
+  battleSpellSaveButtons: document.querySelector("#battle-spell-save-buttons"),
+  spellSavePass: document.querySelector("#spell-save-pass"),
+  spellSaveFail: document.querySelector("#spell-save-fail"),
+  damageForm: document.querySelector("#damage-form"),
+  damageAmount: document.querySelector("#damage-amount"),
+  campaignForm: document.querySelector("#campaign-form"),
+  campaignFormTitle: document.querySelector("#campaign-form-title"),
+  campaignId: document.querySelector("#campaign-id"),
+  campaignName: document.querySelector("#campaign-name"),
+  cancelCampaignEdit: document.querySelector("#cancel-campaign-edit"),
+  sessionForm: document.querySelector("#session-form"),
+  activeCampaignNote: document.querySelector("#active-campaign-note"),
+  sessionDate: document.querySelector("#session-date"),
+  campaignCount: document.querySelector("#campaign-count"),
+  campaignsEmpty: document.querySelector("#campaigns-empty"),
+  campaignList: document.querySelector("#campaign-list"),
+  sessionCount: document.querySelector("#session-count"),
+  sessionsEmpty: document.querySelector("#sessions-empty"),
+  sessionList: document.querySelector("#session-list"),
+  speakingSessionContext: document.querySelector("#speaking-session-context"),
+  recordingStatus: document.querySelector("#recording-status"),
+  recordingDuration: document.querySelector("#recording-duration"),
+  startRecording: document.querySelector("#start-recording"),
+  stopRecording: document.querySelector("#stop-recording"),
+  downloadRecording: document.querySelector("#download-recording"),
+  recordingMessage: document.querySelector("#recording-message"),
+  speakerCount: document.querySelector("#speaker-count"),
+  speakerEmpty: document.querySelector("#speaker-empty"),
+  speakerList: document.querySelector("#speaker-list"),
+  saveSpeakerStats: document.querySelector("#save-speaker-stats"),
+  progressSessionContext: document.querySelector("#progress-session-context"),
+  progressForm: document.querySelector("#progress-form"),
+  transcriptField: document.querySelector("#transcript-field"),
+  recapSummaryField: document.querySelector("#recap-summary-field"),
+  recapEventsField: document.querySelector("#recap-events-field"),
+  recapNpcsField: document.querySelector("#recap-npcs-field"),
+  recapLocationsField: document.querySelector("#recap-locations-field"),
+  recapQuestsField: document.querySelector("#recap-quests-field"),
+  recapThreadsField: document.querySelector("#recap-threads-field"),
+  storySessionCount: document.querySelector("#story-session-count"),
+  campaignStoryEmpty: document.querySelector("#campaign-story-empty"),
+  campaignStoryList: document.querySelector("#campaign-story-list"),
+};
+
+elements.sessionDate.valueAsDate = new Date();
+
+function loadState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    return saved ? mergeState(saved) : clone(initialState);
+  } catch {
+    return clone(initialState);
+  }
+}
+
+function mergeState(saved) {
+  const migrated = {
+    ...clone(initialState),
+    ...saved,
+    combat: {
+      ...clone(initialState.combat),
+      ...(saved.combat || {}),
+    },
+  };
+  migrated.combat = normalizeCombat(migrated.combat);
+  migrateCampaigns(migrated);
+  return migrated;
+}
+
+function migrateCampaigns(nextState) {
+  nextState.dms = Array.isArray(nextState.dms) ? nextState.dms : [];
+  nextState.members = Array.isArray(nextState.members)
+    ? nextState.members.map((member) => ({
+        ...member,
+        armorClass: member.armorClass ?? "",
+        maxHealth: member.maxHealth ?? "",
+      }))
+    : [];
+  nextState.sessions = Array.isArray(nextState.sessions) ? nextState.sessions : [];
+  nextState.campaigns = Array.isArray(nextState.campaigns) ? nextState.campaigns : [];
+
+  nextState.sessions = nextState.sessions.map((session, index) => ({
+    id: session.id || createId("session"),
+    date: session.date || new Date().toISOString().slice(0, 10),
+    campaignId: session.campaignId || null,
+    participantMemberIds: session.participantMemberIds || [],
+    combats: Array.isArray(session.combats) ? session.combats.map(normalizeBattleRecord) : [],
+    recording: normalizeRecording(session.recording),
+    transcript: session.transcript || "",
+    speakerStats: Array.isArray(session.speakerStats) ? session.speakerStats : [],
+    recap: normalizeRecap(session.recap),
+    createdAt: session.createdAt || Date.now() + index,
+  }));
+
+  if (!nextState.campaigns.length && nextState.sessions.length) {
+    const campaignId = createId("campaign");
+    nextState.campaigns.push({
+      id: campaignId,
+      name: "First Campaign",
+      dmIds: nextState.dms.map((dm) => dm.id),
+      sessionIds: nextState.sessions.map((session) => session.id),
+      status: "active",
+    });
+    nextState.sessions = nextState.sessions.map((session) => ({ ...session, campaignId }));
+    nextState.currentCampaignId = campaignId;
+  }
+
+  nextState.campaigns = nextState.campaigns.map((campaign) => {
+    const sessionIds = nextState.sessions
+      .filter((session) => session.campaignId === campaign.id || campaign.sessionIds?.includes(session.id))
+      .map((session) => session.id);
+    return {
+      id: campaign.id || createId("campaign"),
+      name: campaign.name || "Untitled Campaign",
+      dmIds: Array.isArray(campaign.dmIds) ? campaign.dmIds : [],
+      sessionIds,
+      status: campaign.status === "finished" ? "finished" : "active",
+    };
+  });
+
+  const currentCampaign = nextState.campaigns.find((campaign) => campaign.id === nextState.currentCampaignId);
+  if (!currentCampaign) {
+    nextState.currentCampaignId =
+      nextState.campaigns.find((campaign) => campaign.status === "active")?.id || nextState.campaigns[0]?.id || null;
+  }
+
+  const currentSession = nextState.sessions.find((session) => session.id === nextState.currentSessionId);
+  if (!currentSession || currentSession.campaignId !== nextState.currentCampaignId) {
+    nextState.currentSessionId = getCampaignSessions(nextState, nextState.currentCampaignId)[0]?.id || null;
+  }
+}
+
+function normalizeCombat(combat) {
+  return {
+    ...clone(initialState.combat),
+    ...combat,
+    monsters: Array.isArray(combat.monsters) ? combat.monsters.map(normalizeCombatantStats) : [],
+    combatants: Array.isArray(combat.combatants) ? combat.combatants.map(normalizeCombatantStats) : [],
+    actions: Array.isArray(combat.actions) ? combat.actions : [],
+    pendingDamageTargets: Array.isArray(combat.pendingDamageTargets) ? combat.pendingDamageTargets : [],
+    selectedTargetIds: Array.isArray(combat.selectedTargetIds) ? combat.selectedTargetIds : [],
+  };
+}
+
+function normalizeCombatantStats(combatant) {
+  const maxHealth = Number(combatant.maxHealth || combatant.health || 0);
+  const currentHealth = combatant.currentHealth ?? maxHealth;
+  return {
+    ...combatant,
+    armorClass: combatant.armorClass ?? "",
+    maxHealth: combatant.maxHealth ?? maxHealth,
+    currentHealth: Math.max(0, Number(currentHealth || 0)),
+    defeated: Boolean(combatant.defeated) || Number(currentHealth || 0) <= 0,
+  };
+}
+
+function normalizeBattleRecord(record) {
+  return {
+    id: record.id || createId("battle"),
+    name: record.name || "Battle",
+    combatants: Array.isArray(record.combatants) ? record.combatants.map(normalizeCombatantStats) : [],
+    activeIndex: record.activeIndex || 0,
+    status: record.status || "setup",
+    startedAt: record.startedAt || null,
+    endedAt: record.endedAt || null,
+    actions: Array.isArray(record.actions) ? record.actions : [],
+    finalCombatants: Array.isArray(record.finalCombatants) ? record.finalCombatants.map(normalizeCombatantStats) : [],
+    summary: record.summary || "",
+  };
+}
+
+function clone(value) {
+  if (typeof structuredClone === "function") {
+    return structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value));
+}
+
+function normalizeRecording(recording) {
+  if (!recording) return null;
+  return {
+    status: recording.status || "saved",
+    startedAt: recording.startedAt || null,
+    durationSeconds: Number(recording.durationSeconds || 0),
+    fileName: recording.fileName || "",
+  };
+}
+
+function normalizeRecap(recap) {
+  if (typeof recap === "string") {
+    return {
+      summary: recap,
+      events: "",
+      npcs: "",
+      locations: "",
+      quests: "",
+      unresolvedThreads: "",
+    };
+  }
+  return {
+    summary: recap?.summary || "",
+    events: recap?.events || "",
+    npcs: recap?.npcs || "",
+    locations: recap?.locations || "",
+    quests: recap?.quests || "",
+    unresolvedThreads: recap?.unresolvedThreads || "",
+  };
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function createId(prefix) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function showView(viewName) {
+  elements.views.forEach((view) => {
+    view.classList.toggle("active", view.id === `view-${viewName}`);
+  });
+  document.querySelectorAll(".nav-tab").forEach((button) => {
+    button.classList.toggle("active", button.dataset.view === viewName);
+  });
+}
+
+function render() {
+  renderHome();
+  renderRoster();
+  renderDms();
+  renderCombatBuilder();
+  renderCombatants();
+  renderCampaignsAndSessions();
+  renderSpeakingTime();
+  renderProgressNotes();
+  saveState();
+}
+
+function renderHome() {
+  const activeCampaign = getActiveCampaign();
+  const activeSessions = getCampaignSessions(state, state.currentCampaignId);
+  elements.homeTitle.textContent = getCampaignDisplayTitle(activeCampaign);
+  elements.heroMemberCount.textContent = state.members.length;
+  elements.heroDmCount.textContent = state.dms.length;
+  elements.heroCampaignName.textContent = activeCampaign?.name || "No campaign";
+  elements.heroSessionCount.textContent = activeSessions.length;
+}
+
+function renderRoster() {
+  elements.rosterCount.textContent = `${state.members.length} saved`;
+  elements.rosterEmpty.classList.toggle("hidden", state.members.length > 0);
+
+  elements.memberList.innerHTML = state.members
+    .map(
+      (member) => `
+        <article class="member-card">
+          <div>
+            <strong>${escapeHtml(member.characterName)}</strong>
+            <small>${escapeHtml(member.playerName)} playing a ${escapeHtml(member.characterRace)} - AC ${escapeHtml(member.armorClass || "unset")} - HP ${escapeHtml(member.maxHealth || "unset")}</small>
+          </div>
+          <div class="card-actions">
+            <button class="icon-button" type="button" data-edit-member="${member.id}" aria-label="Edit ${escapeHtml(member.characterName)}">Edit</button>
+            <button class="icon-button delete-button" type="button" data-delete-member="${member.id}" aria-label="Delete ${escapeHtml(member.characterName)}">Del</button>
+          </div>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function renderDms() {
+  elements.dmCount.textContent = `${state.dms.length} saved`;
+  elements.dmEmpty.classList.toggle("hidden", state.dms.length > 0);
+  elements.dmList.innerHTML = state.dms
+    .map(
+      (dm) => `
+        <article class="member-card">
+          <div>
+            <strong>${escapeHtml(dm.name)}</strong>
+            <small>Dungeon Master</small>
+          </div>
+          <div class="card-actions">
+            <button class="icon-button" type="button" data-edit-dm="${dm.id}" aria-label="Edit ${escapeHtml(dm.name)}">Edit</button>
+            <button class="icon-button delete-button" type="button" data-delete-dm="${dm.id}" aria-label="Delete ${escapeHtml(dm.name)}">Del</button>
+          </div>
+        </article>
+      `,
+    )
+    .join("");
+}
+
+function renderCombatBuilder() {
+  elements.combatRosterEmpty.classList.toggle("hidden", state.members.length > 0);
+  elements.combatMemberOptions.innerHTML = state.members
+    .map((member) => {
+      const checked = state.combat.selectedMemberIds.includes(member.id) ? "checked" : "";
+      const ready = Number(member.armorClass) > 0 && Number(member.maxHealth) > 0;
+      return `
+        <label class="check-row ${ready ? "" : "disabled-row"}">
+          <input type="checkbox" data-combat-member="${member.id}" ${checked} ${ready ? "" : "disabled"} />
+          <span>
+            <strong>${escapeHtml(member.characterName)}</strong><br />
+            <span class="combatant-meta">${escapeHtml(member.playerName)} - ${escapeHtml(member.characterRace)} - AC ${escapeHtml(member.armorClass || "unset")} - HP ${escapeHtml(member.maxHealth || "unset")}${ready ? "" : " - edit roster stats before battle"}</span>
+          </span>
+        </label>
+      `;
+    })
+    .join("");
+
+  elements.monsterList.innerHTML = state.combat.monsters
+    .map(
+      (monster) => `
+        <div class="monster-chip">
+          <span>${escapeHtml(monster.displayName)} - AC ${escapeHtml(monster.armorClass)} - HP ${escapeHtml(monster.maxHealth)}</span>
+          <button class="icon-button delete-button" data-delete-monster="${monster.id}" type="button">Del</button>
+        </div>
+      `,
+    )
+    .join("");
+}
+
+function renderCombatants() {
+  syncCombatants();
+  const combatants = state.combat.combatants;
+  elements.combatantsEmpty.classList.toggle("hidden", combatants.length > 0);
+
+  elements.combatantList.innerHTML = combatants
+    .map((combatant, index) => {
+      const active = state.combat.sorted && index === state.combat.activeIndex ? "active" : "";
+      const tied = hasTie(combatant) ? "tie" : "";
+      return `
+        <div class="combatant-row ${active} ${tied}">
+          <span class="turn-number">${index + 1}</span>
+          <div>
+            <strong>${escapeHtml(combatant.displayName)}</strong>
+            <div class="combatant-meta">${combatant.type === "character" ? "Character" : "Monster"} - AC ${escapeHtml(combatant.armorClass || "unset")} - HP ${escapeHtml(combatant.currentHealth ?? combatant.maxHealth ?? "unset")}/${escapeHtml(combatant.maxHealth || "unset")}${tied ? " - tied roll" : ""}</div>
+          </div>
+          <label>
+            Roll
+            <input type="number" data-roll="${combatant.id}" value="${combatant.initiativeRoll ?? ""}" />
+          </label>
+          <div class="reorder-buttons" aria-label="Manual tie order controls">
+            <button class="icon-button" data-move-up="${combatant.id}" type="button" aria-label="Move up">Up</button>
+            <button class="icon-button" data-move-down="${combatant.id}" type="button" aria-label="Move down">Down</button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  renderCurrentTurn();
+  renderInitiativeScreen();
+  saveCombatToSession();
+}
+
+function renderCurrentTurn() {
+  const combatants = state.combat.combatants;
+  if (!combatants.length) {
+    elements.currentTurn.textContent = "No active battle";
+    elements.turnDetail.textContent = "Select characters or add monsters to begin.";
+    elements.startInitiative.disabled = true;
+    return;
+  }
+
+  if (!state.combat.sorted) {
+    elements.currentTurn.textContent = "Ready to sort";
+    elements.turnDetail.textContent = "Enter rolls, then sort or auto-roll before starting.";
+    elements.startInitiative.disabled = true;
+    return;
+  }
+
+  if (!hasCompleteInitiative()) {
+    elements.currentTurn.textContent = "Enter every roll";
+    elements.turnDetail.textContent = "Every combatant needs a turn-order roll before battle can start.";
+    elements.startInitiative.disabled = true;
+    return;
+  }
+
+  ensureActiveLivingCombatant();
+  const active = combatants[state.combat.activeIndex] || combatants[0];
+  if (!active || !getLivingCombatants().length) {
+    elements.currentTurn.textContent = "Battle complete";
+    elements.turnDetail.textContent = "All combatants are at 0 health.";
+    elements.startInitiative.disabled = true;
+    return;
+  }
+  elements.currentTurn.textContent = "Start Battle";
+  elements.turnDetail.textContent = `${active.displayName} is first with roll ${active.initiativeRoll ?? "not entered"}.`;
+  elements.startInitiative.disabled = false;
+}
+
+function renderInitiativeScreen() {
+  const combatants = state.combat.combatants;
+  ensureActiveLivingCombatant();
+  const active = getActiveCombatant();
+  if (!combatants.length || !state.combat.sorted || !active) {
+    elements.initiativeScreenTitle.textContent = "No active turn";
+    elements.initiativeScreenDetail.textContent = "Start battle from the tracker.";
+    elements.initiativeScreenRoll.textContent = "Roll --";
+    elements.initiativeScreenName.textContent = "No combatant";
+    elements.initiativeScreenType.textContent = "Waiting for battle";
+    elements.battleFocusStats.innerHTML = "";
+    elements.initiativeScreenOrder.innerHTML = "";
+    elements.battleStatusList.innerHTML = "";
+    resetBattleActionUi("Choose an action for the active combatant.");
+    return;
+  }
+
+  elements.initiativeScreenTitle.textContent = `${active.displayName}'s turn`;
+  elements.initiativeScreenDetail.textContent = `Turn ${state.combat.activeIndex + 1} of ${combatants.length}`;
+  elements.initiativeScreenRoll.textContent = `Roll ${active.initiativeRoll ?? "--"}`;
+  elements.initiativeScreenName.textContent = active.displayName;
+  elements.initiativeScreenType.textContent = active.type === "character" ? "Player character" : "Monster";
+  elements.battleFocusStats.innerHTML = `
+    <span>AC ${escapeHtml(active.armorClass)}</span>
+    <span>HP ${escapeHtml(active.currentHealth)}/${escapeHtml(active.maxHealth)}</span>
+  `;
+  elements.initiativeScreenOrder.innerHTML = combatants
+    .map(
+      (combatant, index) => `
+        <div class="screen-order-row ${index === state.combat.activeIndex ? "active" : ""} ${combatant.defeated || combatant.currentHealth <= 0 ? "defeated" : ""}">
+          <span>${index + 1}</span>
+          <strong>${escapeHtml(combatant.displayName)}</strong>
+          <small>${combatant.initiativeRoll ?? "--"} / HP ${escapeHtml(combatant.currentHealth)}</small>
+        </div>
+      `,
+    )
+    .join("");
+  elements.battleStatusList.innerHTML = combatants
+    .map(
+      (combatant) => `
+        <div class="battle-status-row ${combatant.defeated || combatant.currentHealth <= 0 ? "defeated" : ""}">
+          <strong>${escapeHtml(combatant.displayName)}</strong>
+          <span>AC ${escapeHtml(combatant.armorClass)}</span>
+          <span>HP ${escapeHtml(combatant.currentHealth)}/${escapeHtml(combatant.maxHealth)}</span>
+        </div>
+      `,
+    )
+    .join("");
+  renderBattleActionUi();
+}
+
+function renderCampaignsAndSessions() {
+  const activeCampaign = getActiveCampaign();
+  const activeSessions = getCampaignSessions(state, state.currentCampaignId);
+  elements.campaignCount.textContent = `${state.campaigns.length} saved`;
+  elements.campaignsEmpty.classList.toggle("hidden", state.campaigns.length > 0);
+  elements.activeCampaignNote.textContent = activeCampaign
+    ? `New sessions will be saved under ${activeCampaign.name}.`
+    : "Create a campaign first.";
+  elements.sessionForm.querySelector("button").disabled = !activeCampaign;
+
+  elements.campaignList.innerHTML = state.campaigns
+    .map((campaign) => {
+      const campaignSessions = getCampaignSessions(state, campaign.id);
+      const dms = getCampaignDms(campaign);
+      const current = campaign.id === state.currentCampaignId ? "Active" : "Set active";
+      const finished = campaign.status === "finished";
+      return `
+        <article class="campaign-card">
+          <div class="campaign-main">
+            <strong>${escapeHtml(campaign.name)}</strong>
+            <div class="campaign-meta">
+              <span>${finished ? "Finished" : "Active"}</span>
+              <span>${campaignSessions.length} session${campaignSessions.length === 1 ? "" : "s"}</span>
+              <span>DM: ${dms.length ? escapeHtml(formatNameList(dms.map((dm) => dm.name))) : "None yet"}</span>
+            </div>
+          </div>
+          <div class="campaign-actions">
+            <button class="icon-button" type="button" data-current-campaign="${campaign.id}">${current}</button>
+            <button class="icon-button" type="button" data-finish-campaign="${campaign.id}">${finished ? "Reopen" : "Finish"}</button>
+            <button class="icon-button" type="button" data-edit-campaign="${campaign.id}" aria-label="Edit ${escapeHtml(campaign.name)}">Edit</button>
+            <button class="icon-button delete-button" type="button" data-delete-campaign="${campaign.id}" aria-label="Delete ${escapeHtml(campaign.name)}">Del</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+  elements.sessionCount.textContent = `${activeSessions.length} saved`;
+  elements.sessionsEmpty.classList.toggle("hidden", activeSessions.length > 0);
+  elements.sessionList.innerHTML = activeSessions
+    .map((session, index) => {
+      const current = session.id === state.currentSessionId ? "Current session" : "Make current";
+      const combatCount = session.combats?.length || 0;
+      return `
+        <article class="session-card">
+          <div>
+            <strong>${escapeHtml(getSessionLabel(session, index))}</strong>
+            <small>${combatCount} battle record${combatCount === 1 ? "" : "s"}</small>
+            ${combatCount ? `<div class="battle-summary-list">${session.combats.map((battle) => `<span>${escapeHtml(battle.summary || battle.name || "Saved battle")}</span>`).join("")}</div>` : ""}
+          </div>
+          <div class="card-actions">
+            <button class="icon-button" type="button" data-current-session="${session.id}">${current}</button>
+            <button class="icon-button delete-button" type="button" data-delete-session="${session.id}">Del</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderSpeakingTime() {
+  const session = getCurrentSession();
+  const activeCampaign = getActiveCampaign();
+  const speakers = getSpeakers();
+  elements.speakingSessionContext.textContent = session
+    ? `Speaking time for ${getSessionLabel(session, getSessionIndex(session))} in ${activeCampaign?.name || "the active campaign"}.`
+    : "Create or select a session to record audio and track speaking time.";
+
+  const recording = session?.recording || null;
+  elements.recordingStatus.textContent = recording?.status || "No recording";
+  elements.recordingDuration.textContent = formatDuration(recording?.durationSeconds || 0);
+  elements.startRecording.disabled = !session || Boolean(mediaRecorder);
+  elements.stopRecording.disabled = !mediaRecorder;
+  elements.saveSpeakerStats.disabled = !session;
+  elements.speakerCount.textContent = `${speakers.length} speaker${speakers.length === 1 ? "" : "s"}`;
+  elements.speakerEmpty.classList.toggle("hidden", speakers.length > 0);
+
+  if (!recordingDownloadUrl) {
+    elements.downloadRecording.classList.add("hidden");
+    elements.downloadRecording.removeAttribute("href");
+  }
+
+  const stats = session?.speakerStats || [];
+  elements.speakerList.innerHTML = speakers
+    .map((speaker) => {
+      const stat = stats.find((entry) => entry.speakerId === speaker.id && entry.speakerType === speaker.type);
+      return `
+        <label class="speaker-row">
+          <span>
+            <strong>${escapeHtml(speaker.name)}</strong>
+            <small>${speaker.type === "dm" ? "Dungeon Master" : "Player character"}</small>
+          </span>
+          <input type="number" min="0" step="1" data-speaker-id="${speaker.id}" data-speaker-type="${speaker.type}" value="${stat?.minutes ?? 0}" ${session ? "" : "disabled"} />
+        </label>
+      `;
+    })
+    .join("");
+}
+
+function renderProgressNotes() {
+  const session = getCurrentSession();
+  const activeCampaign = getActiveCampaign();
+  const activeSessions = getCampaignSessions(state, state.currentCampaignId);
+  elements.progressSessionContext.textContent = session
+    ? `Notes for ${getSessionLabel(session, getSessionIndex(session))} in ${activeCampaign?.name || "the active campaign"}.`
+    : "Create or select a session to write transcripts, recaps, and campaign notes.";
+
+  const recap = normalizeRecap(session?.recap);
+  elements.transcriptField.value = session?.transcript || "";
+  elements.recapSummaryField.value = recap.summary;
+  elements.recapEventsField.value = recap.events;
+  elements.recapNpcsField.value = recap.npcs;
+  elements.recapLocationsField.value = recap.locations;
+  elements.recapQuestsField.value = recap.quests;
+  elements.recapThreadsField.value = recap.unresolvedThreads;
+
+  const disabled = !session;
+  [
+    elements.transcriptField,
+    elements.recapSummaryField,
+    elements.recapEventsField,
+    elements.recapNpcsField,
+    elements.recapLocationsField,
+    elements.recapQuestsField,
+    elements.recapThreadsField,
+  ].forEach((field) => {
+    field.disabled = disabled;
+  });
+  elements.progressForm.querySelector("button").disabled = disabled;
+
+  const sessionsWithRecaps = activeSessions.filter((entry) => normalizeRecap(entry.recap).summary.trim());
+  elements.storySessionCount.textContent = `${sessionsWithRecaps.length} session${sessionsWithRecaps.length === 1 ? "" : "s"}`;
+  elements.campaignStoryEmpty.classList.toggle("hidden", sessionsWithRecaps.length > 0);
+  elements.campaignStoryList.innerHTML = sessionsWithRecaps
+    .map((entry) => {
+      const entryRecap = normalizeRecap(entry.recap);
+      return `
+        <article class="story-card">
+          <strong>${escapeHtml(getSessionLabel(entry, getSessionIndex(entry)))}</strong>
+          <p>${escapeHtml(entryRecap.summary)}</p>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function syncCombatants() {
+  const characterCombatants = state.combat.selectedMemberIds
+    .map((memberId) => {
+      const member = state.members.find((entry) => entry.id === memberId);
+      if (!member) return null;
+      const existing = state.combat.combatants.find((entry) => entry.memberId === memberId);
+      return {
+        id: existing?.id || `character-${memberId}`,
+        type: "character",
+        displayName: member.characterName,
+        memberId,
+        armorClass: Number(member.armorClass || existing?.armorClass || 0),
+        maxHealth: Number(member.maxHealth || existing?.maxHealth || 0),
+        currentHealth: existing?.currentHealth ?? Number(member.maxHealth || 0),
+        defeated: Boolean(existing?.defeated) || Number(existing?.currentHealth ?? member.maxHealth ?? 0) <= 0,
+        initiativeRoll: existing?.initiativeRoll ?? "",
+      };
+    })
+    .filter(Boolean);
+
+  const monsterCombatants = state.combat.monsters.map((monster) => {
+    const existing = state.combat.combatants.find((entry) => entry.id === monster.id);
+    return {
+      id: monster.id,
+      type: "monster",
+      displayName: monster.displayName,
+      armorClass: Number(monster.armorClass || existing?.armorClass || 0),
+      maxHealth: Number(monster.maxHealth || existing?.maxHealth || 0),
+      currentHealth: existing?.currentHealth ?? Number(monster.maxHealth || 0),
+      defeated: Boolean(existing?.defeated) || Number(existing?.currentHealth ?? monster.maxHealth ?? 0) <= 0,
+      initiativeRoll: existing?.initiativeRoll ?? "",
+    };
+  });
+
+  const nextCombatants = [...characterCombatants, ...monsterCombatants];
+  if (state.combat.sorted) {
+    const order = new Map(state.combat.combatants.map((entry, index) => [entry.id, index]));
+    nextCombatants.sort((a, b) => (order.get(a.id) ?? 999) - (order.get(b.id) ?? 999));
+  }
+  state.combat.combatants = nextCombatants;
+  if (state.combat.activeIndex >= nextCombatants.length) {
+    state.combat.activeIndex = 0;
+  }
+}
+
+function hasTie(combatant) {
+  if (combatant.initiativeRoll === "" || combatant.initiativeRoll === null) return false;
+  return state.combat.combatants.some(
+    (entry) => entry.id !== combatant.id && Number(entry.initiativeRoll) === Number(combatant.initiativeRoll),
+  );
+}
+
+function hasCompleteInitiative() {
+  return (
+    state.combat.combatants.length > 0 &&
+    state.combat.combatants.every((combatant) => combatant.initiativeRoll !== "" && combatant.initiativeRoll !== null)
+  );
+}
+
+function getActiveCombatant() {
+  return state.combat.combatants[state.combat.activeIndex] || null;
+}
+
+function getLivingCombatants() {
+  return state.combat.combatants.filter((combatant) => !combatant.defeated && Number(combatant.currentHealth) > 0);
+}
+
+function ensureActiveLivingCombatant() {
+  const combatants = state.combat.combatants;
+  if (!combatants.length || !getLivingCombatants().length) return;
+  const active = combatants[state.combat.activeIndex];
+  if (active && !active.defeated && Number(active.currentHealth) > 0) return;
+  advanceTurn(false);
+}
+
+function advanceTurn(shouldRender = true) {
+  const combatants = state.combat.combatants;
+  if (!combatants.length) return;
+  if (!getLivingCombatants().length) {
+    resetBattleActionState();
+    if (shouldRender) render();
+    return;
+  }
+  for (let step = 1; step <= combatants.length; step += 1) {
+    const nextIndex = (state.combat.activeIndex + step) % combatants.length;
+    const next = combatants[nextIndex];
+    if (next && !next.defeated && Number(next.currentHealth) > 0) {
+      state.combat.activeIndex = nextIndex;
+      break;
+    }
+  }
+  resetBattleActionState();
+  if (shouldRender) render();
+}
+
+function resetBattleActionState() {
+  state.combat.actionMode = "idle";
+  state.combat.selectedTargetId = null;
+  state.combat.selectedTargetIds = [];
+  state.combat.pendingDamageTargets = [];
+}
+
+function getAvailableTargets() {
+  const active = getActiveCombatant();
+  if (!active) return [];
+  const targetType = active.type === "character" ? "monster" : "character";
+  return state.combat.combatants.filter(
+    (combatant) => combatant.type === targetType && !combatant.defeated && Number(combatant.currentHealth) > 0,
+  );
+}
+
+function renderBattleActionUi() {
+  const mode = state.combat.actionMode || "idle";
+  elements.battleActionButtons.classList.toggle("hidden", !["idle"].includes(mode));
+  elements.battleResultButtons.classList.toggle("hidden", mode !== "target-selected");
+  elements.battleSpellSaveButtons.classList.toggle("hidden", mode !== "spell-save");
+  elements.damageForm.classList.toggle("hidden", mode !== "damage");
+
+  if (mode === "idle") {
+    resetBattleActionUi("Choose an action for the active combatant.");
+    return;
+  }
+
+  if (mode === "attack-target" || mode === "multi-target") {
+    const targets = getAvailableTargets();
+    const multi = mode === "multi-target";
+    elements.battleActionMessage.textContent = multi
+      ? "Choose one or more targets for the multi-attack spell."
+      : "Choose one target to attack.";
+    elements.battleTargetList.innerHTML = targets
+      .map(
+        (target) => `
+          <label class="battle-target-row">
+            <input type="${multi ? "checkbox" : "radio"}" name="battle-target" data-battle-target="${target.id}" ${state.combat.selectedTargetIds.includes(target.id) || state.combat.selectedTargetId === target.id ? "checked" : ""} />
+            <span>
+              <strong>${escapeHtml(target.displayName)}</strong>
+              <small>AC ${escapeHtml(target.armorClass)} - HP ${escapeHtml(target.currentHealth)}/${escapeHtml(target.maxHealth)}</small>
+            </span>
+          </label>
+        `,
+      )
+      .join("");
+    if (multi) {
+      elements.battleTargetList.insertAdjacentHTML("beforeend", '<button class="primary-button" type="button" id="confirm-multi-targets">Confirm targets</button>');
+    }
+    return;
+  }
+
+  if (mode === "target-selected") {
+    const target = state.combat.combatants.find((entry) => entry.id === state.combat.selectedTargetId);
+    elements.battleActionMessage.textContent = target
+      ? `${target.displayName}'s Armor Class is ${target.armorClass}. Did the roll pass, fail, or use a spell?`
+      : "Choose the roll result.";
+    elements.battleTargetList.innerHTML = "";
+    return;
+  }
+
+  if (mode === "spell-save") {
+    const target = getCurrentPendingTarget();
+    elements.battleActionMessage.textContent = target
+      ? `${target.displayName}: did the spell save pass or fail?`
+      : "Resolve the spell save.";
+    elements.battleTargetList.innerHTML = "";
+    return;
+  }
+
+  if (mode === "damage") {
+    const target = getCurrentPendingTarget();
+    elements.battleActionMessage.textContent = target
+      ? `Enter damage for ${target.displayName}. HP will not go below 0.`
+      : "Enter damage.";
+    elements.battleTargetList.innerHTML = "";
+  }
+}
+
+function resetBattleActionUi(message) {
+  elements.battleActionMessage.textContent = message;
+  elements.battleTargetList.innerHTML = "";
+  elements.battleResultButtons.classList.add("hidden");
+  elements.battleSpellSaveButtons.classList.add("hidden");
+  elements.damageForm.classList.add("hidden");
+  elements.battleActionButtons.classList.remove("hidden");
+}
+
+function getCurrentPendingTarget() {
+  const targetId = state.combat.pendingDamageTargets[0] || state.combat.selectedTargetId;
+  return state.combat.combatants.find((entry) => entry.id === targetId) || null;
+}
+
+function logBattleAction(text) {
+  const active = getActiveCombatant();
+  state.combat.actions.push({
+    id: createId("action"),
+    actorId: active?.id || "",
+    actorName: active?.displayName || "Unknown",
+    text,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+function applyDamageToTarget(targetId, damage) {
+  const target = state.combat.combatants.find((entry) => entry.id === targetId);
+  if (!target) return;
+  const amount = Math.max(0, Number(damage || 0));
+  target.currentHealth = Math.max(0, Number(target.currentHealth || 0) - amount);
+  target.defeated = target.currentHealth <= 0;
+  logBattleAction(`${target.displayName} took ${amount} damage and has ${target.currentHealth}/${target.maxHealth} HP.`);
+}
+
+function getCombatantName(id) {
+  return state.combat.combatants.find((entry) => entry.id === id)?.displayName || "Unknown target";
+}
+
+function completeBattle() {
+  if (!state.currentSessionId || !state.combat.combatants.length) return;
+  const session = getCurrentSession();
+  if (!session) return;
+  const endedAt = new Date().toISOString();
+  const finalCombatants = state.combat.combatants.map((combatant) => ({ ...combatant }));
+  const defeated = finalCombatants.filter((combatant) => combatant.defeated || combatant.currentHealth <= 0);
+  const summary = `${finalCombatants.length} combatants. ${defeated.length} defeated.`;
+  const battleRecord = {
+    id: createId("battle"),
+    name: `Battle - ${formatDate(session.date)}`,
+    combatants: finalCombatants.map((combatant) => ({
+      id: combatant.id,
+      type: combatant.type,
+      displayName: combatant.displayName,
+      armorClass: combatant.armorClass,
+      maxHealth: combatant.maxHealth,
+      startingHealth: combatant.maxHealth,
+      initiativeRoll: combatant.initiativeRoll,
+    })),
+    finalCombatants,
+    activeIndex: state.combat.activeIndex,
+    status: "completed",
+    startedAt: state.combat.startedAt || endedAt,
+    endedAt,
+    actions: [...state.combat.actions],
+    summary,
+  };
+  session.combats = [...(session.combats || []).filter((battle) => battle.id !== "current-combat"), battleRecord];
+  state.combat = clone(initialState.combat);
+}
+
+function sortInitiative() {
+  state.combat.combatants.sort((a, b) => {
+    const bRoll = b.initiativeRoll === "" ? -Infinity : Number(b.initiativeRoll);
+    const aRoll = a.initiativeRoll === "" ? -Infinity : Number(a.initiativeRoll);
+    return bRoll - aRoll;
+  });
+  state.combat.sorted = true;
+  state.combat.activeIndex = 0;
+  render();
+}
+
+function autoRollInitiative() {
+  syncCombatants();
+  state.combat.combatants = state.combat.combatants.map((combatant) => ({
+    ...combatant,
+    initiativeRoll: String(Math.floor(Math.random() * 20) + 1),
+  }));
+  sortInitiative();
+}
+
+function moveCombatant(id, direction) {
+  const index = state.combat.combatants.findIndex((combatant) => combatant.id === id);
+  const targetIndex = index + direction;
+  if (index < 0 || targetIndex < 0 || targetIndex >= state.combat.combatants.length) return;
+  const [combatant] = state.combat.combatants.splice(index, 1);
+  state.combat.combatants.splice(targetIndex, 0, combatant);
+  if (state.combat.activeIndex === index) {
+    state.combat.activeIndex = targetIndex;
+  } else if (state.combat.activeIndex === targetIndex) {
+    state.combat.activeIndex = index;
+  }
+  state.combat.sorted = true;
+  render();
+}
+
+function saveCombatToSession() {
+  if (!state.currentSessionId || !state.combat.combatants.length) return;
+  const session = state.sessions.find((entry) => entry.id === state.currentSessionId);
+  if (!session) return;
+  const currentCombat = {
+    id: "current-combat",
+    name: "Current battle",
+    combatants: state.combat.combatants,
+    activeIndex: state.combat.activeIndex,
+    status: state.combat.sorted ? "active" : "setup",
+    startedAt: state.combat.startedAt,
+    actions: state.combat.actions,
+    finalCombatants: state.combat.combatants,
+    summary: "Battle in progress.",
+  };
+  session.participantMemberIds = state.combat.selectedMemberIds;
+  session.combats = [...(session.combats || []).filter((battle) => battle.id !== "current-combat"), currentCombat];
+}
+
+function resetCombat() {
+  state.combat = clone(initialState.combat);
+  closeInitiativeScreen();
+  render();
+}
+
+function closeInitiativeScreen() {
+  elements.initiativeScreen.classList.add("hidden");
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatDate(dateString) {
+  const date = new Date(`${dateString}T00:00:00`);
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date);
+}
+
+function getActiveCampaign() {
+  return state.campaigns.find((campaign) => campaign.id === state.currentCampaignId) || null;
+}
+
+function getCurrentSession() {
+  return state.sessions.find((session) => session.id === state.currentSessionId) || null;
+}
+
+function getCampaignSessions(targetState, campaignId) {
+  if (!campaignId) return [];
+  return targetState.sessions
+    .filter((session) => session.campaignId === campaignId)
+    .sort((a, b) => new Date(a.date) - new Date(b.date) || (a.createdAt || 0) - (b.createdAt || 0));
+}
+
+function getCampaignDms(campaign) {
+  const ids = campaign?.dmIds?.length ? campaign.dmIds : state.dms.map((dm) => dm.id);
+  return ids.map((id) => state.dms.find((dm) => dm.id === id)).filter(Boolean);
+}
+
+function getCampaignDisplayTitle(campaign) {
+  const dms = getCampaignDms(campaign).map((dm) => dm.name);
+  if (dms.length) {
+    return `${formatNameList(dms)}'s Campaign`;
+  }
+  return campaign?.name || "D&D Club Campaign";
+}
+
+function formatNameList(names) {
+  if (names.length <= 1) return names[0] || "";
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
+function getSessionLabel(session, index) {
+  return `Session ${index + 1} - ${formatDate(session.date)}`;
+}
+
+function getSessionIndex(session) {
+  return Math.max(0, getCampaignSessions(state, session?.campaignId).findIndex((entry) => entry.id === session?.id));
+}
+
+function getSpeakers() {
+  const players = state.members.map((member) => ({
+    id: member.id,
+    type: "member",
+    name: `${member.playerName} (${member.characterName})`,
+  }));
+  const dms = state.dms.map((dm) => ({
+    id: dm.id,
+    type: "dm",
+    name: dm.name,
+  }));
+  return [...players, ...dms];
+}
+
+function formatDuration(totalSeconds) {
+  const seconds = Math.max(0, Math.round(totalSeconds || 0));
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function updateRecordingDuration() {
+  if (!recordingStartedAt) return;
+  elements.recordingDuration.textContent = formatDuration((Date.now() - recordingStartedAt) / 1000);
+}
+
+function getAudioMimeType() {
+  if (!window.MediaRecorder) return "";
+  if (MediaRecorder.isTypeSupported("audio/webm")) return "audio/webm";
+  if (MediaRecorder.isTypeSupported("audio/mp4")) return "audio/mp4";
+  return "";
+}
+
+function getAudioExtension(mimeType) {
+  return mimeType.includes("mp4") ? "m4a" : "webm";
+}
+
+elements.navButtons.forEach((button) => {
+  button.addEventListener("click", () => showView(button.dataset.view));
+});
+
+elements.memberForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const member = {
+    id: elements.memberId.value || createId("member"),
+    playerName: elements.playerName.value.trim(),
+    characterName: elements.characterName.value.trim(),
+    characterRace: elements.characterRace.value.trim(),
+    armorClass: Number(elements.armorClass.value),
+    maxHealth: Number(elements.maxHealth.value),
+    voiceSampleId: null,
+  };
+  if (!member.playerName || !member.characterName || !member.characterRace || !member.armorClass || !member.maxHealth) return;
+
+  const existingIndex = state.members.findIndex((entry) => entry.id === member.id);
+  if (existingIndex >= 0) {
+    state.members[existingIndex] = { ...state.members[existingIndex], ...member };
+  } else {
+    state.members.push(member);
+  }
+
+  elements.memberForm.reset();
+  elements.memberId.value = "";
+  elements.memberFormTitle.textContent = "Add a player character";
+  elements.cancelEdit.classList.add("hidden");
+  render();
+});
+
+elements.cancelEdit.addEventListener("click", () => {
+  elements.memberForm.reset();
+  elements.memberId.value = "";
+  elements.memberFormTitle.textContent = "Add a player character";
+  elements.cancelEdit.classList.add("hidden");
+});
+
+elements.memberList.addEventListener("click", (event) => {
+  const editId = event.target.dataset.editMember;
+  const deleteId = event.target.dataset.deleteMember;
+
+  if (editId) {
+    const member = state.members.find((entry) => entry.id === editId);
+    if (!member) return;
+    elements.memberId.value = member.id;
+    elements.playerName.value = member.playerName;
+    elements.characterName.value = member.characterName;
+    elements.characterRace.value = member.characterRace;
+    elements.armorClass.value = member.armorClass || "";
+    elements.maxHealth.value = member.maxHealth || "";
+    elements.memberFormTitle.textContent = "Edit player character";
+    elements.cancelEdit.classList.remove("hidden");
+  }
+
+  if (deleteId) {
+    state.members = state.members.filter((member) => member.id !== deleteId);
+    state.combat.selectedMemberIds = state.combat.selectedMemberIds.filter((id) => id !== deleteId);
+    state.combat.combatants = state.combat.combatants.filter((combatant) => combatant.memberId !== deleteId);
+    render();
+  }
+});
+
+elements.dmForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const dm = {
+    id: elements.dmId.value || createId("dm"),
+    name: elements.dmName.value.trim(),
+  };
+  if (!dm.name) return;
+
+  const existingIndex = state.dms.findIndex((entry) => entry.id === dm.id);
+  if (existingIndex >= 0) {
+    state.dms[existingIndex] = { ...state.dms[existingIndex], ...dm };
+  } else {
+    state.dms.push({ ...dm, voiceSampleId: null });
+    state.campaigns = state.campaigns.map((campaign) =>
+      campaign.status === "active" ? { ...campaign, dmIds: [...new Set([...(campaign.dmIds || []), dm.id])] } : campaign,
+    );
+  }
+
+  elements.dmForm.reset();
+  elements.dmId.value = "";
+  elements.dmFormTitle.textContent = "Add a Dungeon Master";
+  elements.cancelDmEdit.classList.add("hidden");
+  render();
+});
+
+elements.cancelDmEdit.addEventListener("click", () => {
+  elements.dmForm.reset();
+  elements.dmId.value = "";
+  elements.dmFormTitle.textContent = "Add a Dungeon Master";
+  elements.cancelDmEdit.classList.add("hidden");
+});
+
+elements.dmList.addEventListener("click", (event) => {
+  const editId = event.target.dataset.editDm;
+  const deleteId = event.target.dataset.deleteDm;
+
+  if (editId) {
+    const dm = state.dms.find((entry) => entry.id === editId);
+    if (!dm) return;
+    elements.dmId.value = dm.id;
+    elements.dmName.value = dm.name;
+    elements.dmFormTitle.textContent = "Edit Dungeon Master";
+    elements.cancelDmEdit.classList.remove("hidden");
+  }
+
+  if (deleteId) {
+    state.dms = state.dms.filter((dm) => dm.id !== deleteId);
+    state.campaigns = state.campaigns.map((campaign) => ({
+      ...campaign,
+      dmIds: (campaign.dmIds || []).filter((dmId) => dmId !== deleteId),
+    }));
+    render();
+  }
+});
+
+elements.combatMemberOptions.addEventListener("change", (event) => {
+  const memberId = event.target.dataset.combatMember;
+  if (!memberId) return;
+  if (event.target.checked) {
+    state.combat.selectedMemberIds.push(memberId);
+  } else {
+    state.combat.selectedMemberIds = state.combat.selectedMemberIds.filter((id) => id !== memberId);
+  }
+  state.combat.sorted = false;
+  closeInitiativeScreen();
+  render();
+});
+
+elements.monsterForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const type = elements.monsterType.value.trim();
+  const count = Math.max(1, Number(elements.monsterCount.value || 1));
+  const armorClass = Number(elements.monsterArmorClass.value || 0);
+  const maxHealth = Number(elements.monsterHealth.value || 0);
+  if (!type || !armorClass || !maxHealth) return;
+  for (let index = 1; index <= count; index += 1) {
+    state.combat.monsters.push({
+      id: createId("monster"),
+      type,
+      displayName: count === 1 ? type : `${type} ${index}`,
+      armorClass,
+      maxHealth,
+      currentHealth: maxHealth,
+      defeated: false,
+    });
+  }
+  elements.monsterType.value = "";
+  elements.monsterCount.value = 1;
+  elements.monsterArmorClass.value = 10;
+  elements.monsterHealth.value = 10;
+  state.combat.sorted = false;
+  closeInitiativeScreen();
+  render();
+});
+
+elements.monsterList.addEventListener("click", (event) => {
+  const monsterId = event.target.dataset.deleteMonster;
+  if (!monsterId) return;
+  state.combat.monsters = state.combat.monsters.filter((monster) => monster.id !== monsterId);
+  state.combat.combatants = state.combat.combatants.filter((combatant) => combatant.id !== monsterId);
+  closeInitiativeScreen();
+  render();
+});
+
+elements.combatantList.addEventListener("input", (event) => {
+  const combatantId = event.target.dataset.roll;
+  if (!combatantId) return;
+  const combatant = state.combat.combatants.find((entry) => entry.id === combatantId);
+  if (combatant) {
+    combatant.initiativeRoll = event.target.value;
+    state.combat.sorted = false;
+    closeInitiativeScreen();
+    renderCurrentTurn();
+    renderInitiativeScreen();
+    saveState();
+  }
+});
+
+elements.combatantList.addEventListener("click", (event) => {
+  const upId = event.target.dataset.moveUp;
+  const downId = event.target.dataset.moveDown;
+  if (upId) moveCombatant(upId, -1);
+  if (downId) moveCombatant(downId, 1);
+});
+
+elements.autoRollInitiative.addEventListener("click", autoRollInitiative);
+elements.sortInitiative.addEventListener("click", sortInitiative);
+elements.resetCombat.addEventListener("click", resetCombat);
+
+elements.startInitiative.addEventListener("click", () => {
+  if (!state.combat.combatants.length || !state.combat.sorted || !hasCompleteInitiative()) return;
+  state.combat.startedAt = state.combat.startedAt || new Date().toISOString();
+  state.combat.battleRunning = true;
+  ensureActiveLivingCombatant();
+  elements.initiativeScreen.classList.remove("hidden");
+  renderInitiativeScreen();
+  saveState();
+});
+
+elements.exitInitiativeScreen.addEventListener("click", () => {
+  completeBattle();
+  closeInitiativeScreen();
+  render();
+});
+
+elements.battleOther.addEventListener("click", () => {
+  logBattleAction("Turn ended with Other.");
+  advanceTurn();
+});
+
+elements.battleAttack.addEventListener("click", () => {
+  state.combat.actionMode = "attack-target";
+  state.combat.selectedTargetId = null;
+  renderInitiativeScreen();
+});
+
+elements.battleMultiAttack.addEventListener("click", () => {
+  state.combat.actionMode = "multi-target";
+  state.combat.selectedTargetIds = [];
+  renderInitiativeScreen();
+});
+
+elements.battleTargetList.addEventListener("change", (event) => {
+  const targetId = event.target.dataset.battleTarget;
+  if (!targetId) return;
+  if (state.combat.actionMode === "multi-target") {
+    if (event.target.checked) {
+      state.combat.selectedTargetIds = [...new Set([...state.combat.selectedTargetIds, targetId])];
+    } else {
+      state.combat.selectedTargetIds = state.combat.selectedTargetIds.filter((id) => id !== targetId);
+    }
+  } else {
+    state.combat.selectedTargetId = targetId;
+    state.combat.actionMode = "target-selected";
+  }
+  renderInitiativeScreen();
+});
+
+elements.battleTargetList.addEventListener("click", (event) => {
+  if (event.target.id !== "confirm-multi-targets") return;
+  if (!state.combat.selectedTargetIds.length) return;
+  state.combat.pendingDamageTargets = [...state.combat.selectedTargetIds];
+  state.combat.actionMode = "spell-save";
+  logBattleAction(`Multi-attack targets: ${state.combat.selectedTargetIds.map(getCombatantName).join(", ")}.`);
+  renderInitiativeScreen();
+});
+
+elements.battlePass.addEventListener("click", () => {
+  if (!state.combat.selectedTargetId) return;
+  state.combat.pendingDamageTargets = [state.combat.selectedTargetId];
+  state.combat.actionMode = "damage";
+  logBattleAction(`Attack passed against ${getCombatantName(state.combat.selectedTargetId)}.`);
+  renderInitiativeScreen();
+});
+
+elements.battleFail.addEventListener("click", () => {
+  logBattleAction(`Attack failed against ${getCombatantName(state.combat.selectedTargetId)}.`);
+  advanceTurn();
+});
+
+elements.battleSpell.addEventListener("click", () => {
+  if (!state.combat.selectedTargetId) return;
+  state.combat.pendingDamageTargets = [state.combat.selectedTargetId];
+  state.combat.actionMode = "spell-save";
+  renderInitiativeScreen();
+});
+
+elements.spellSavePass.addEventListener("click", () => {
+  const target = getCurrentPendingTarget();
+  if (!target) return;
+  logBattleAction(`Spell save passed for ${target.displayName}.`);
+  state.combat.actionMode = "damage";
+  renderInitiativeScreen();
+});
+
+elements.spellSaveFail.addEventListener("click", () => {
+  const target = getCurrentPendingTarget();
+  if (target) logBattleAction(`Spell save failed for ${target.displayName}.`);
+  state.combat.pendingDamageTargets.shift();
+  if (state.combat.pendingDamageTargets.length) {
+    state.combat.actionMode = "spell-save";
+    renderInitiativeScreen();
+  } else {
+    advanceTurn();
+  }
+});
+
+elements.damageForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const target = getCurrentPendingTarget();
+  if (!target) return;
+  applyDamageToTarget(target.id, elements.damageAmount.value);
+  elements.damageAmount.value = 0;
+  state.combat.pendingDamageTargets.shift();
+  if (state.combat.pendingDamageTargets.length) {
+    state.combat.actionMode = "spell-save";
+    render();
+  } else {
+    advanceTurn();
+  }
+});
+
+elements.campaignForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const campaignName = elements.campaignName.value.trim();
+  if (!campaignName) return;
+
+  if (elements.campaignId.value) {
+    state.campaigns = state.campaigns.map((campaign) =>
+      campaign.id === elements.campaignId.value ? { ...campaign, name: campaignName } : campaign,
+    );
+  } else {
+    const campaign = {
+      id: createId("campaign"),
+      name: campaignName,
+      dmIds: state.dms.map((dm) => dm.id),
+      sessionIds: [],
+      status: "active",
+    };
+    state.campaigns = state.campaigns.map((entry) => ({ ...entry, status: "finished" }));
+    state.campaigns.unshift(campaign);
+    state.currentCampaignId = campaign.id;
+    state.currentSessionId = null;
+  }
+  elements.campaignId.value = "";
+  elements.campaignName.value = "";
+  elements.campaignFormTitle.textContent = "Create a campaign";
+  elements.cancelCampaignEdit.classList.add("hidden");
+  render();
+});
+
+elements.cancelCampaignEdit.addEventListener("click", () => {
+  elements.campaignId.value = "";
+  elements.campaignName.value = "";
+  elements.campaignFormTitle.textContent = "Create a campaign";
+  elements.cancelCampaignEdit.classList.add("hidden");
+});
+
+elements.sessionForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const campaign = getActiveCampaign();
+  if (!campaign) return;
+  const session = {
+    id: createId("session"),
+    date: elements.sessionDate.value,
+    campaignId: campaign.id,
+    participantMemberIds: [],
+    combats: [],
+    recording: null,
+    transcript: null,
+    speakerStats: null,
+    recap: null,
+    createdAt: Date.now(),
+  };
+  if (!session.date) return;
+  state.sessions.push(session);
+  campaign.sessionIds = [...new Set([...(campaign.sessionIds || []), session.id])];
+  state.currentSessionId = session.id;
+  elements.sessionDate.valueAsDate = new Date();
+  render();
+});
+
+elements.campaignList.addEventListener("click", (event) => {
+  const currentId = event.target.dataset.currentCampaign;
+  const finishId = event.target.dataset.finishCampaign;
+  const editId = event.target.dataset.editCampaign;
+  const deleteId = event.target.dataset.deleteCampaign;
+
+  if (currentId) {
+    state.campaigns = state.campaigns.map((campaign) =>
+      campaign.id === currentId ? { ...campaign, status: "active" } : { ...campaign, status: "finished" },
+    );
+    state.currentCampaignId = currentId;
+    state.currentSessionId = getCampaignSessions(state, currentId)[0]?.id || null;
+    render();
+  }
+
+  if (finishId) {
+    const campaignToToggle = state.campaigns.find((campaign) => campaign.id === finishId);
+    const reopening = campaignToToggle?.status === "finished";
+    state.campaigns = state.campaigns.map((campaign) => {
+      if (campaign.id === finishId) {
+        return { ...campaign, status: reopening ? "active" : "finished" };
+      }
+      return reopening ? { ...campaign, status: "finished" } : campaign;
+    });
+    if (reopening) {
+      state.currentCampaignId = finishId;
+      state.currentSessionId = getCampaignSessions(state, finishId)[0]?.id || null;
+    } else if (state.currentCampaignId === finishId) {
+      state.currentCampaignId = state.campaigns.find((campaign) => campaign.status === "active")?.id || finishId;
+      state.currentSessionId = getCampaignSessions(state, state.currentCampaignId)[0]?.id || null;
+    }
+    render();
+  }
+
+  if (editId) {
+    const campaign = state.campaigns.find((entry) => entry.id === editId);
+    if (!campaign) return;
+    elements.campaignId.value = campaign.id;
+    elements.campaignName.value = campaign.name;
+    elements.campaignFormTitle.textContent = "Edit campaign";
+    elements.cancelCampaignEdit.classList.remove("hidden");
+  }
+
+  if (deleteId) {
+    state.campaigns = state.campaigns.filter((campaign) => campaign.id !== deleteId);
+    state.sessions = state.sessions.filter((session) => session.campaignId !== deleteId);
+    if (elements.campaignId.value === deleteId) {
+      elements.campaignId.value = "";
+      elements.campaignName.value = "";
+      elements.campaignFormTitle.textContent = "Create a campaign";
+      elements.cancelCampaignEdit.classList.add("hidden");
+    }
+    if (state.currentCampaignId === deleteId) {
+      state.currentCampaignId =
+        state.campaigns.find((campaign) => campaign.status === "active")?.id || state.campaigns[0]?.id || null;
+      state.currentSessionId = getCampaignSessions(state, state.currentCampaignId)[0]?.id || null;
+    }
+    render();
+  }
+});
+
+elements.sessionList.addEventListener("click", (event) => {
+  const currentId = event.target.dataset.currentSession;
+  const deleteId = event.target.dataset.deleteSession;
+  if (currentId) {
+    state.currentSessionId = currentId;
+    render();
+  }
+  if (deleteId) {
+    state.sessions = state.sessions.filter((session) => session.id !== deleteId);
+    state.campaigns = state.campaigns.map((campaign) => ({
+      ...campaign,
+      sessionIds: (campaign.sessionIds || []).filter((sessionId) => sessionId !== deleteId),
+    }));
+    if (state.currentSessionId === deleteId) {
+      state.currentSessionId = getCampaignSessions(state, state.currentCampaignId)[0]?.id || null;
+    }
+    render();
+  }
+});
+
+elements.startRecording.addEventListener("click", async () => {
+  const session = getCurrentSession();
+  if (!session) return;
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    elements.recordingMessage.textContent = "This browser does not support local microphone recording.";
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = getAudioMimeType();
+    recordingChunks = [];
+    recordingStartedAt = Date.now();
+    mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    session.recording = {
+      status: "recording",
+      startedAt: new Date(recordingStartedAt).toISOString(),
+      durationSeconds: 0,
+      fileName: "",
+    };
+    elements.recordingMessage.textContent = "Recording in progress.";
+    if (recordingDownloadUrl) {
+      URL.revokeObjectURL(recordingDownloadUrl);
+      recordingDownloadUrl = null;
+    }
+    elements.downloadRecording.classList.add("hidden");
+
+    mediaRecorder.addEventListener("dataavailable", (event) => {
+      if (event.data.size > 0) recordingChunks.push(event.data);
+    });
+
+    mediaRecorder.addEventListener("stop", () => {
+      const durationSeconds = Math.round((Date.now() - recordingStartedAt) / 1000);
+      const type = mediaRecorder.mimeType || mimeType || "audio/webm";
+      const extension = getAudioExtension(type);
+      const fileName = `dnd-session-${session.date}.${extension}`;
+      const blob = new Blob(recordingChunks, { type });
+      recordingDownloadUrl = URL.createObjectURL(blob);
+      session.recording = {
+        status: "ready to download",
+        startedAt: session.recording?.startedAt || new Date(recordingStartedAt).toISOString(),
+        durationSeconds,
+        fileName,
+      };
+      elements.downloadRecording.href = recordingDownloadUrl;
+      elements.downloadRecording.download = fileName;
+      elements.downloadRecording.classList.remove("hidden");
+      elements.recordingMessage.textContent = "Recording stopped. Download the audio file before closing this page.";
+      stream.getTracks().forEach((track) => track.stop());
+      clearInterval(recordingTimerId);
+      mediaRecorder = null;
+      recordingStartedAt = null;
+      render();
+    });
+
+    mediaRecorder.start();
+    recordingTimerId = setInterval(updateRecordingDuration, 500);
+    render();
+  } catch (error) {
+    elements.recordingMessage.textContent = "Microphone access was blocked or unavailable. Check browser permissions and try again.";
+    mediaRecorder = null;
+    recordingStartedAt = null;
+    clearInterval(recordingTimerId);
+  }
+});
+
+elements.stopRecording.addEventListener("click", () => {
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    mediaRecorder.stop();
+  }
+});
+
+elements.saveSpeakerStats.addEventListener("click", () => {
+  const session = getCurrentSession();
+  if (!session) return;
+  const inputs = elements.speakerList.querySelectorAll("[data-speaker-id]");
+  session.speakerStats = Array.from(inputs).map((input) => {
+    const speaker = getSpeakers().find(
+      (entry) => entry.id === input.dataset.speakerId && entry.type === input.dataset.speakerType,
+    );
+    return {
+      speakerId: input.dataset.speakerId,
+      speakerType: input.dataset.speakerType,
+      name: speaker?.name || "Unknown speaker",
+      minutes: Math.max(0, Number(input.value || 0)),
+    };
+  });
+  render();
+});
+
+elements.progressForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const session = getCurrentSession();
+  if (!session) return;
+  session.transcript = elements.transcriptField.value.trim();
+  session.recap = {
+    summary: elements.recapSummaryField.value.trim(),
+    events: elements.recapEventsField.value.trim(),
+    npcs: elements.recapNpcsField.value.trim(),
+    locations: elements.recapLocationsField.value.trim(),
+    quests: elements.recapQuestsField.value.trim(),
+    unresolvedThreads: elements.recapThreadsField.value.trim(),
+  };
+  render();
+});
+
+render();
