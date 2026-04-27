@@ -549,6 +549,70 @@ textarea {
   display: block;
 }
 
+.chart-list,
+.speaker-segment-list {
+  display: grid;
+  gap: 10px;
+}
+
+.chart-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(140px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgba(243, 223, 178, 0.18);
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(15, 13, 10, 0.35);
+}
+
+.chart-label strong,
+.chart-label span {
+  display: block;
+}
+
+.chart-label span,
+.speaker-segment-card small,
+.speaker-segment-card p {
+  color: var(--muted);
+}
+
+.chart-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.chart-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--gold), var(--ember));
+}
+
+.speaker-segment-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px minmax(0, 1.2fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.speaker-segment-card {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid rgba(243, 223, 178, 0.18);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(15, 13, 10, 0.35);
+}
+
+.speaker-segment-card p {
+  margin-bottom: 0;
+}
+
 .progress-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.8fr);
@@ -658,7 +722,7 @@ textarea {
   z-index: 20;
   display: grid;
   place-items: center;
-  padding: 22px;
+  padding: 16px;
   background:
     radial-gradient(circle at 50% 18%, rgba(216, 164, 65, 0.2), transparent 30rem),
     linear-gradient(145deg, rgba(12, 10, 8, 0.96), rgba(35, 24, 17, 0.98));
@@ -666,13 +730,15 @@ textarea {
 
 .initiative-screen-card {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 20px;
-  width: min(1120px, 100%);
-  height: min(760px, 100%);
+  grid-template-rows: auto minmax(220px, 1fr) minmax(180px, 0.85fr);
+  gap: 14px;
+  width: min(1180px, 100%);
+  height: calc(100vh - 32px);
+  max-height: 860px;
+  overflow: hidden;
   border: 1px solid rgba(216, 164, 65, 0.42);
   border-radius: 8px;
-  padding: 24px;
+  padding: 18px;
   background:
     linear-gradient(rgba(31, 27, 21, 0.92), rgba(31, 27, 21, 0.92)),
     repeating-linear-gradient(35deg, rgba(243, 223, 178, 0.06) 0 2px, transparent 2px 12px);
@@ -700,7 +766,7 @@ textarea {
 }
 
 .initiative-screen-body {
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
   min-height: 0;
 }
 
@@ -708,8 +774,8 @@ textarea {
   display: grid;
   place-items: center;
   align-content: center;
-  gap: 18px;
-  min-height: 360px;
+  gap: 12px;
+  min-height: 0;
   border: 1px solid rgba(216, 164, 65, 0.32);
   border-radius: 8px;
   background:
@@ -729,7 +795,7 @@ textarea {
 .turn-focus strong {
   max-width: 100%;
   color: #fff8e6;
-  font-size: clamp(3.2rem, 10vw, 8rem);
+  font-size: clamp(2.6rem, 8vw, 5.8rem);
   line-height: 0.95;
   overflow-wrap: anywhere;
 }
@@ -757,13 +823,19 @@ textarea {
 }
 
 .initiative-order-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .screen-order-list {
   display: grid;
+  align-content: start;
   gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .screen-order-row {
@@ -803,13 +875,40 @@ textarea {
   grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
   gap: 16px;
   min-height: 0;
+  overflow: hidden;
+}
+
+.battle-screen-grid > .panel {
+  min-height: 0;
+}
+
+.battle-screen-grid > .panel:first-child {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .battle-status-list,
 .battle-target-list,
 .battle-summary-list {
   display: grid;
+  align-content: start;
   gap: 8px;
+}
+
+.battle-status-list,
+.battle-target-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.battle-status-list {
+  max-height: 100%;
+}
+
+.battle-target-list {
+  max-height: min(34vh, 260px);
 }
 
 .battle-status-row,
@@ -849,7 +948,10 @@ textarea {
 
 .battle-action-panel {
   display: grid;
-  gap: 14px;
+  grid-template-rows: auto auto auto minmax(0, auto) auto auto auto;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
 }
 
 .damage-form {
@@ -865,6 +967,81 @@ textarea {
 
 .battle-summary-list span {
   display: block;
+}
+
+.inline-link-button {
+  margin-left: 8px;
+  border: 0;
+  padding: 0;
+  color: var(--gold);
+  background: transparent;
+  font-family: Arial, sans-serif;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.battle-results-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.battle-results-list {
+  display: grid;
+  gap: 12px;
+}
+
+.battle-result-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(243, 223, 178, 0.18);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(15, 13, 10, 0.35);
+}
+
+.battle-result-card.highlighted {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(216, 164, 65, 0.2);
+}
+
+.battle-result-header,
+.battle-result-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.battle-result-header strong,
+.battle-result-header small,
+.battle-result-combatants span,
+.battle-result-actions span {
+  display: block;
+}
+
+.battle-result-header small,
+.battle-result-meta,
+.battle-result-combatants,
+.battle-result-actions {
+  color: var(--muted);
+}
+
+.battle-result-combatants,
+.battle-result-actions {
+  display: grid;
+  max-height: 210px;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.battle-result-combatants span,
+.battle-result-actions span {
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.18);
 }
 
 .screen-next-button {
@@ -902,7 +1079,10 @@ textarea {
   }
 
   .monster-form,
-  .combatant-row {
+  .combatant-row,
+  .speaker-segment-form,
+  .speaker-segment-card,
+  .chart-row {
     grid-template-columns: 1fr;
   }
 
@@ -920,7 +1100,27 @@ textarea {
 
   .initiative-screen-card {
     height: 100%;
+    max-height: none;
+    grid-template-rows: auto;
     overflow: auto;
+  }
+
+  .initiative-screen-body,
+  .battle-screen-grid {
+    min-height: auto;
+  }
+
+  .turn-focus {
+    min-height: 280px;
+  }
+
+  .initiative-order-panel,
+  .battle-screen-grid > .panel:first-child {
+    max-height: 380px;
+  }
+
+  .battle-action-panel {
+    max-height: none;
   }
 
   .campaign-story-panel {

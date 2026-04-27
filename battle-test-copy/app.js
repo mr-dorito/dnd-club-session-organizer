@@ -1,4 +1,10 @@
 const STORAGE_KEY = "dnd-club-battle-test-state";
+// The Session Notes screen lets the organizer override this after deploying the backend.
+let API_BASE_URL =
+  localStorage.getItem("dnd-club-api-base-url") ||
+  (["localhost", "127.0.0.1"].includes(window.location.hostname)
+    ? "http://localhost:3001"
+    : "https://your-dnd-club-backend.onrender.com");
 
 const initialState = {
   members: [],
@@ -29,6 +35,7 @@ let recordingChunks = [];
 let recordingStartedAt = null;
 let recordingTimerId = null;
 let recordingDownloadUrl = null;
+let highlightedBattleId = null;
 
 const elements = {
   views: document.querySelectorAll(".view"),
@@ -46,6 +53,7 @@ const elements = {
   characterRace: document.querySelector("#character-race"),
   armorClass: document.querySelector("#armor-class"),
   maxHealth: document.querySelector("#max-health"),
+  currentHealth: document.querySelector("#current-health"),
   cancelEdit: document.querySelector("#cancel-edit"),
   dmForm: document.querySelector("#dm-form"),
   dmFormTitle: document.querySelector("#dm-form-title"),
@@ -74,6 +82,9 @@ const elements = {
   currentTurn: document.querySelector("#current-turn"),
   turnDetail: document.querySelector("#turn-detail"),
   startInitiative: document.querySelector("#start-initiative"),
+  battleResultCount: document.querySelector("#battle-result-count"),
+  battleResultsEmpty: document.querySelector("#battle-results-empty"),
+  battleResultsList: document.querySelector("#battle-results-list"),
   initiativeScreen: document.querySelector("#initiative-screen"),
   initiativeScreenTitle: document.querySelector("#initiative-screen-title"),
   initiativeScreenDetail: document.querySelector("#initiative-screen-detail"),
@@ -120,10 +131,23 @@ const elements = {
   stopRecording: document.querySelector("#stop-recording"),
   downloadRecording: document.querySelector("#download-recording"),
   recordingMessage: document.querySelector("#recording-message"),
+  audioProcessingStatus: document.querySelector("#audio-processing-status"),
+  audioProcessingNote: document.querySelector("#audio-processing-note"),
+  audioProcessingFile: document.querySelector("#audio-processing-file"),
+  speakerReviewStatus: document.querySelector("#speaker-review-status"),
   speakerCount: document.querySelector("#speaker-count"),
   speakerEmpty: document.querySelector("#speaker-empty"),
   speakerList: document.querySelector("#speaker-list"),
   saveSpeakerStats: document.querySelector("#save-speaker-stats"),
+  sessionSpeakingChart: document.querySelector("#session-speaking-chart"),
+  campaignSpeakingChart: document.querySelector("#campaign-speaking-chart"),
+  speakerSegmentCount: document.querySelector("#speaker-segment-count"),
+  speakerSegmentsEmpty: document.querySelector("#speaker-segments-empty"),
+  speakerSegmentList: document.querySelector("#speaker-segment-list"),
+  speakerSegmentForm: document.querySelector("#speaker-segment-form"),
+  segmentSpeakerLabel: document.querySelector("#segment-speaker-label"),
+  segmentMinutes: document.querySelector("#segment-minutes"),
+  segmentNote: document.querySelector("#segment-note"),
   progressSessionContext: document.querySelector("#progress-session-context"),
   progressForm: document.querySelector("#progress-form"),
   transcriptField: document.querySelector("#transcript-field"),
@@ -133,6 +157,12 @@ const elements = {
   recapLocationsField: document.querySelector("#recap-locations-field"),
   recapQuestsField: document.querySelector("#recap-quests-field"),
   recapThreadsField: document.querySelector("#recap-threads-field"),
+  aiStatus: document.querySelector("#ai-status"),
+  aiToolsNote: document.querySelector("#ai-tools-note"),
+  generateRecap: document.querySelector("#generate-recap"),
+  apiBaseUrl: document.querySelector("#api-base-url"),
+  saveApiBaseUrl: document.querySelector("#save-api-base-url"),
+  clearApiBaseUrl: document.querySelector("#clear-api-base-url"),
   storySessionCount: document.querySelector("#story-session-count"),
   campaignStoryEmpty: document.querySelector("#campaign-story-empty"),
   campaignStoryList: document.querySelector("#campaign-story-list"),
@@ -166,11 +196,7 @@ function mergeState(saved) {
 function migrateCampaigns(nextState) {
   nextState.dms = Array.isArray(nextState.dms) ? nextState.dms : [];
   nextState.members = Array.isArray(nextState.members)
-    ? nextState.members.map((member) => ({
-        ...member,
-        armorClass: member.armorClass ?? "",
-        maxHealth: member.maxHealth ?? "",
-      }))
+    ? nextState.members.map(normalizeMemberStats)
     : [];
   nextState.sessions = Array.isArray(nextState.sessions) ? nextState.sessions : [];
   nextState.campaigns = Array.isArray(nextState.campaigns) ? nextState.campaigns : [];
@@ -184,6 +210,9 @@ function migrateCampaigns(nextState) {
     recording: normalizeRecording(session.recording),
     transcript: session.transcript || "",
     speakerStats: Array.isArray(session.speakerStats) ? session.speakerStats : [],
+    aiStatus: session.aiStatus || "not-ready",
+    speakerSegments: Array.isArray(session.speakerSegments) ? session.speakerSegments : [],
+    speakerReviewStatus: session.speakerReviewStatus || "manual",
     recap: normalizeRecap(session.recap),
     createdAt: session.createdAt || Date.now() + index,
   }));
@@ -241,28 +270,52 @@ function normalizeCombat(combat) {
 function normalizeCombatantStats(combatant) {
   const maxHealth = Number(combatant.maxHealth || combatant.health || 0);
   const currentHealth = combatant.currentHealth ?? maxHealth;
+  const startingHealth = combatant.startingHealth ?? combatant.initialHealth ?? maxHealth;
   return {
     ...combatant,
     armorClass: combatant.armorClass ?? "",
     maxHealth: combatant.maxHealth ?? maxHealth,
     currentHealth: Math.max(0, Number(currentHealth || 0)),
+    startingHealth: Math.max(0, Number(startingHealth || 0)),
     defeated: Boolean(combatant.defeated) || Number(currentHealth || 0) <= 0,
   };
 }
 
 function normalizeBattleRecord(record) {
+  const combatants = Array.isArray(record.combatants) ? record.combatants.map(normalizeCombatantStats) : [];
+  const finalCombatants = Array.isArray(record.finalCombatants)
+    ? record.finalCombatants.map(normalizeCombatantStats)
+    : combatants.map((combatant) => ({ ...combatant }));
   return {
     id: record.id || createId("battle"),
     name: record.name || "Battle",
-    combatants: Array.isArray(record.combatants) ? record.combatants.map(normalizeCombatantStats) : [],
+    combatants,
     activeIndex: record.activeIndex || 0,
     status: record.status || "setup",
     startedAt: record.startedAt || null,
     endedAt: record.endedAt || null,
     actions: Array.isArray(record.actions) ? record.actions : [],
-    finalCombatants: Array.isArray(record.finalCombatants) ? record.finalCombatants.map(normalizeCombatantStats) : [],
+    finalCombatants,
     summary: record.summary || "",
   };
+}
+
+function normalizeMemberStats(member) {
+  const maxHealth = member.maxHealth === "" || member.maxHealth === undefined ? "" : Number(member.maxHealth);
+  const fallbackCurrent = maxHealth === "" ? "" : maxHealth;
+  const currentHealth =
+    member.currentHealth === "" || member.currentHealth === undefined ? fallbackCurrent : Number(member.currentHealth);
+  return {
+    ...member,
+    armorClass: member.armorClass ?? "",
+    maxHealth,
+    currentHealth: maxHealth === "" ? "" : clampHealth(currentHealth, maxHealth),
+  };
+}
+
+function clampHealth(currentHealth, maxHealth) {
+  const max = Math.max(0, Number(maxHealth || 0));
+  return Math.min(max, Math.max(0, Number(currentHealth || 0)));
 }
 
 function clone(value) {
@@ -326,6 +379,7 @@ function render() {
   renderDms();
   renderCombatBuilder();
   renderCombatants();
+  renderBattleResults();
   renderCampaignsAndSessions();
   renderSpeakingTime();
   renderProgressNotes();
@@ -352,7 +406,7 @@ function renderRoster() {
         <article class="member-card">
           <div>
             <strong>${escapeHtml(member.characterName)}</strong>
-            <small>${escapeHtml(member.playerName)} playing a ${escapeHtml(member.characterRace)} - AC ${escapeHtml(member.armorClass || "unset")} - HP ${escapeHtml(member.maxHealth || "unset")}</small>
+            <small>${escapeHtml(member.playerName)} playing a ${escapeHtml(member.characterRace)} - AC ${escapeHtml(member.armorClass || "unset")} - HP ${escapeHtml(member.currentHealth ?? "unset")}/${escapeHtml(member.maxHealth || "unset")}</small>
           </div>
           <div class="card-actions">
             <button class="icon-button" type="button" data-edit-member="${member.id}" aria-label="Edit ${escapeHtml(member.characterName)}">Edit</button>
@@ -390,13 +444,13 @@ function renderCombatBuilder() {
   elements.combatMemberOptions.innerHTML = state.members
     .map((member) => {
       const checked = state.combat.selectedMemberIds.includes(member.id) ? "checked" : "";
-      const ready = Number(member.armorClass) > 0 && Number(member.maxHealth) > 0;
+      const ready = Number(member.armorClass) > 0 && Number(member.maxHealth) > 0 && member.currentHealth !== "";
       return `
         <label class="check-row ${ready ? "" : "disabled-row"}">
           <input type="checkbox" data-combat-member="${member.id}" ${checked} ${ready ? "" : "disabled"} />
           <span>
             <strong>${escapeHtml(member.characterName)}</strong><br />
-            <span class="combatant-meta">${escapeHtml(member.playerName)} - ${escapeHtml(member.characterRace)} - AC ${escapeHtml(member.armorClass || "unset")} - HP ${escapeHtml(member.maxHealth || "unset")}${ready ? "" : " - edit roster stats before battle"}</span>
+            <span class="combatant-meta">${escapeHtml(member.playerName)} - ${escapeHtml(member.characterRace)} - AC ${escapeHtml(member.armorClass || "unset")} - HP ${escapeHtml(member.currentHealth ?? "unset")}/${escapeHtml(member.maxHealth || "unset")}${ready ? "" : " - edit roster stats before battle"}</span>
           </span>
         </label>
       `;
@@ -447,6 +501,55 @@ function renderCombatants() {
   renderCurrentTurn();
   renderInitiativeScreen();
   saveCombatToSession();
+}
+
+function renderBattleResults() {
+  const battles = getCompletedBattleResults();
+  elements.battleResultCount.textContent = `${battles.length} saved`;
+  elements.battleResultsEmpty.classList.toggle("hidden", battles.length > 0);
+  elements.battleResultsList.innerHTML = battles
+    .map(({ battle, session, sessionIndex }) => {
+      const defeated = (battle.finalCombatants || []).filter(
+        (combatant) => combatant.defeated || Number(combatant.currentHealth) <= 0,
+      );
+      const actions = (battle.actions || []).slice(-4);
+      return `
+        <article class="battle-result-card ${battle.id === highlightedBattleId ? "highlighted" : ""}" id="battle-result-${battle.id}">
+          <div class="battle-result-header">
+            <div>
+              <strong>${escapeHtml(battle.name || "Saved battle")}</strong>
+              <small>${escapeHtml(getSessionLabel(session, sessionIndex))} - ${escapeHtml(formatDate((battle.endedAt || battle.startedAt || session.date).slice(0, 10)))}</small>
+            </div>
+            <button class="icon-button delete-button" type="button" data-delete-battle="${battle.id}" data-battle-session="${session.id}">Del</button>
+          </div>
+          <div class="battle-result-meta">
+            <span>${(battle.finalCombatants || []).length} combatants</span>
+            <span>${defeated.length} defeated</span>
+          </div>
+          <div class="battle-result-combatants">
+            ${(battle.finalCombatants || [])
+              .map((combatant) => {
+                const starting = combatant.startingHealth ?? combatant.maxHealth;
+                return `
+                  <span>
+                    <strong>${escapeHtml(combatant.displayName)}</strong>
+                    ${escapeHtml(combatant.type === "character" ? "Character" : "Monster")} - HP ${escapeHtml(starting)}/${escapeHtml(combatant.maxHealth)} to ${escapeHtml(combatant.currentHealth)}/${escapeHtml(combatant.maxHealth)}
+                  </span>
+                `;
+              })
+              .join("")}
+          </div>
+          <div class="battle-result-actions">
+            ${
+              actions.length
+                ? actions.map((action) => `<span>${escapeHtml(action.text)}</span>`).join("")
+                : "<span>No action notes saved.</span>"
+            }
+          </div>
+        </article>
+      `;
+    })
+    .join("");
 }
 
 function renderCurrentTurn() {
@@ -578,13 +681,27 @@ function renderCampaignsAndSessions() {
   elements.sessionList.innerHTML = activeSessions
     .map((session, index) => {
       const current = session.id === state.currentSessionId ? "Current session" : "Make current";
-      const combatCount = session.combats?.length || 0;
+      const completedBattles = (session.combats || []).filter((battle) => battle.id !== "current-combat" && battle.status === "completed");
+      const combatCount = completedBattles.length;
       return `
         <article class="session-card">
           <div>
             <strong>${escapeHtml(getSessionLabel(session, index))}</strong>
             <small>${combatCount} battle record${combatCount === 1 ? "" : "s"}</small>
-            ${combatCount ? `<div class="battle-summary-list">${session.combats.map((battle) => `<span>${escapeHtml(battle.summary || battle.name || "Saved battle")}</span>`).join("")}</div>` : ""}
+            ${
+              combatCount
+                ? `<div class="battle-summary-list">${completedBattles
+                    .map(
+                      (battle) => `
+                        <span>
+                          ${escapeHtml(battle.summary || battle.name || "Saved battle")}
+                          <button class="inline-link-button" type="button" data-view-battle="${battle.id}" data-battle-session="${session.id}">View results</button>
+                        </span>
+                      `,
+                    )
+                    .join("")}</div>`
+                : ""
+            }
           </div>
           <div class="card-actions">
             <button class="icon-button" type="button" data-current-session="${session.id}">${current}</button>
@@ -607,6 +724,12 @@ function renderSpeakingTime() {
   const recording = session?.recording || null;
   elements.recordingStatus.textContent = recording?.status || "No recording";
   elements.recordingDuration.textContent = formatDuration(recording?.durationSeconds || 0);
+  elements.audioProcessingStatus.textContent = getAudioProcessingStatus(session);
+  elements.audioProcessingFile.textContent = recording?.fileName || "No file yet";
+  elements.speakerReviewStatus.textContent = formatStatus(session?.speakerReviewStatus || "manual");
+  elements.audioProcessingNote.textContent = session
+    ? "Backend processing will upload audio, transcribe it, and prepare speaker labels later."
+    : "Create or select a session before preparing audio for backend processing.";
   elements.startRecording.disabled = !session || Boolean(mediaRecorder);
   elements.stopRecording.disabled = !mediaRecorder;
   elements.saveSpeakerStats.disabled = !session;
@@ -633,6 +756,9 @@ function renderSpeakingTime() {
       `;
     })
     .join("");
+
+  renderSpeakingCharts(session, activeCampaign);
+  renderSpeakerSegments(session);
 }
 
 function renderProgressNotes() {
@@ -642,6 +768,11 @@ function renderProgressNotes() {
   elements.progressSessionContext.textContent = session
     ? `Notes for ${getSessionLabel(session, getSessionIndex(session))} in ${activeCampaign?.name || "the active campaign"}.`
     : "Create or select a session to write transcripts, recaps, and campaign notes.";
+  elements.apiBaseUrl.value = API_BASE_URL;
+  elements.aiStatus.textContent = formatStatus(session?.aiStatus || "not-ready");
+  elements.aiToolsNote.textContent = session
+    ? getAiToolsMessage(session)
+    : "Create or select a session before preparing AI recap generation.";
 
   const recap = normalizeRecap(session?.recap);
   elements.transcriptField.value = session?.transcript || "";
@@ -665,6 +796,7 @@ function renderProgressNotes() {
     field.disabled = disabled;
   });
   elements.progressForm.querySelector("button").disabled = disabled;
+  updateGenerateRecapButton();
 
   const sessionsWithRecaps = activeSessions.filter((entry) => normalizeRecap(entry.recap).summary.trim());
   elements.storySessionCount.textContent = `${sessionsWithRecaps.length} session${sessionsWithRecaps.length === 1 ? "" : "s"}`;
@@ -682,6 +814,70 @@ function renderProgressNotes() {
     .join("");
 }
 
+function renderSpeakingCharts(session, activeCampaign) {
+  const sessionStats = session?.speakerStats || [];
+  renderChart(elements.sessionSpeakingChart, sessionStats, "No speaking minutes saved for this session.");
+
+  const campaignTotals = new Map();
+  getCampaignSessions(state, activeCampaign?.id).forEach((entry) => {
+    (entry.speakerStats || []).forEach((stat) => {
+      const key = `${stat.speakerType}:${stat.speakerId}`;
+      const existing = campaignTotals.get(key) || { ...stat, minutes: 0 };
+      existing.minutes += Number(stat.minutes || 0);
+      campaignTotals.set(key, existing);
+    });
+  });
+  renderChart(elements.campaignSpeakingChart, Array.from(campaignTotals.values()), "No speaking minutes saved for this campaign.");
+}
+
+function renderChart(container, stats, emptyText) {
+  const visibleStats = stats.filter((stat) => Number(stat.minutes) > 0);
+  if (!visibleStats.length) {
+    container.innerHTML = `<div class="empty-state">${emptyText}</div>`;
+    return;
+  }
+  const maxMinutes = Math.max(...visibleStats.map((stat) => Number(stat.minutes || 0)), 1);
+  container.innerHTML = visibleStats
+    .map((stat) => {
+      const width = Math.max(6, Math.round((Number(stat.minutes || 0) / maxMinutes) * 100));
+      return `
+        <div class="chart-row">
+          <div class="chart-label">
+            <strong>${escapeHtml(stat.name)}</strong>
+            <span>${escapeHtml(stat.speakerType === "dm" ? "DM" : "Player")}</span>
+          </div>
+          <div class="chart-track"><span style="width: ${width}%"></span></div>
+          <strong>${escapeHtml(stat.minutes)} min</strong>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderSpeakerSegments(session) {
+  const segments = session?.speakerSegments || [];
+  elements.speakerSegmentForm.querySelector("button").disabled = !session;
+  [elements.segmentSpeakerLabel, elements.segmentMinutes, elements.segmentNote].forEach((field) => {
+    field.disabled = !session;
+  });
+  elements.speakerSegmentCount.textContent = `${segments.length} segment${segments.length === 1 ? "" : "s"}`;
+  elements.speakerSegmentsEmpty.classList.toggle("hidden", segments.length > 0);
+  elements.speakerSegmentList.innerHTML = segments
+    .map(
+      (segment) => `
+        <article class="speaker-segment-card">
+          <div>
+            <strong>${escapeHtml(segment.speakerLabel || "Unknown speaker")}</strong>
+            <small>${escapeHtml(segment.minutes || 0)} min</small>
+          </div>
+          <p>${escapeHtml(segment.note || "Manual review segment")}</p>
+          <button class="icon-button delete-button" type="button" data-delete-segment="${segment.id}">Del</button>
+        </article>
+      `,
+    )
+    .join("");
+}
+
 function syncCombatants() {
   const characterCombatants = state.combat.selectedMemberIds
     .map((memberId) => {
@@ -695,8 +891,9 @@ function syncCombatants() {
         memberId,
         armorClass: Number(member.armorClass || existing?.armorClass || 0),
         maxHealth: Number(member.maxHealth || existing?.maxHealth || 0),
-        currentHealth: existing?.currentHealth ?? Number(member.maxHealth || 0),
-        defeated: Boolean(existing?.defeated) || Number(existing?.currentHealth ?? member.maxHealth ?? 0) <= 0,
+        currentHealth: existing?.currentHealth ?? Number(member.currentHealth ?? member.maxHealth ?? 0),
+        startingHealth: existing?.startingHealth ?? Number(member.currentHealth ?? member.maxHealth ?? 0),
+        defeated: Boolean(existing?.defeated) || Number(existing?.currentHealth ?? member.currentHealth ?? member.maxHealth ?? 0) <= 0,
         initiativeRoll: existing?.initiativeRoll ?? "",
       };
     })
@@ -711,6 +908,7 @@ function syncCombatants() {
       armorClass: Number(monster.armorClass || existing?.armorClass || 0),
       maxHealth: Number(monster.maxHealth || existing?.maxHealth || 0),
       currentHealth: existing?.currentHealth ?? Number(monster.maxHealth || 0),
+      startingHealth: existing?.startingHealth ?? Number(monster.maxHealth || 0),
       defeated: Boolean(existing?.defeated) || Number(existing?.currentHealth ?? monster.maxHealth ?? 0) <= 0,
       initiativeRoll: existing?.initiativeRoll ?? "",
     };
@@ -912,7 +1110,7 @@ function completeBattle() {
       displayName: combatant.displayName,
       armorClass: combatant.armorClass,
       maxHealth: combatant.maxHealth,
-      startingHealth: combatant.maxHealth,
+      startingHealth: combatant.startingHealth ?? combatant.maxHealth,
       initiativeRoll: combatant.initiativeRoll,
     })),
     finalCombatants,
@@ -924,6 +1122,14 @@ function completeBattle() {
     summary,
   };
   session.combats = [...(session.combats || []).filter((battle) => battle.id !== "current-combat"), battleRecord];
+  finalCombatants
+    .filter((combatant) => combatant.type === "character" && combatant.memberId)
+    .forEach((combatant) => {
+      const member = state.members.find((entry) => entry.id === combatant.memberId);
+      if (member) {
+        member.currentHealth = clampHealth(combatant.currentHealth, member.maxHealth);
+      }
+    });
   state.combat = clone(initialState.combat);
 }
 
@@ -1020,6 +1226,14 @@ function getCampaignSessions(targetState, campaignId) {
     .sort((a, b) => new Date(a.date) - new Date(b.date) || (a.createdAt || 0) - (b.createdAt || 0));
 }
 
+function getCompletedBattleResults() {
+  return getCampaignSessions(state, state.currentCampaignId).flatMap((session, sessionIndex) =>
+    (session.combats || [])
+      .filter((battle) => battle.id !== "current-combat" && battle.status === "completed")
+      .map((battle) => ({ battle, session, sessionIndex })),
+  );
+}
+
 function getCampaignDms(campaign) {
   const ids = campaign?.dmIds?.length ? campaign.dmIds : state.dms.map((dm) => dm.id);
   return ids.map((id) => state.dms.find((dm) => dm.id === id)).filter(Boolean);
@@ -1068,6 +1282,56 @@ function formatDuration(totalSeconds) {
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
+function formatStatus(status) {
+  return String(status || "not-ready")
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function getAudioProcessingStatus(session) {
+  if (!session) return "Not uploaded";
+  if (session.aiStatus && session.aiStatus !== "not-ready") return formatStatus(session.aiStatus);
+  if (session.recording?.status === "saved") return "Ready for backend";
+  if (session.recording?.status === "recording") return "Recording";
+  return "Not uploaded";
+}
+
+function getAiToolsMessage(session) {
+  if (session.aiStatus === "processing") return "Generating a structured recap from the transcript.";
+  if (session.aiStatus === "complete") return "AI recap fields were generated. Review them, then save the notes.";
+  if (session.aiStatus === "error") return "AI recap generation failed. Existing notes were kept, and you can try again.";
+  return `AI recap generation sends the transcript to ${API_BASE_URL}. Review generated fields before saving.`;
+}
+
+function updateGenerateRecapButton() {
+  if (!elements.generateRecap) return;
+  const session = getCurrentSession();
+  const transcript = elements.transcriptField?.value.trim() || "";
+  const disabled = !session || !transcript || session.aiStatus === "processing";
+  elements.generateRecap.disabled = disabled;
+  if (!session) {
+    elements.generateRecap.textContent = "Generate recap from transcript";
+  } else if (session.aiStatus === "processing") {
+    elements.generateRecap.textContent = "Generating recap...";
+  } else if (!transcript) {
+    elements.generateRecap.textContent = "Add transcript to generate recap";
+  } else {
+    elements.generateRecap.textContent = "Generate recap from transcript";
+  }
+}
+
+function getCurrentRecapDraft() {
+  return {
+    summary: elements.recapSummaryField.value.trim(),
+    events: elements.recapEventsField.value.trim(),
+    npcs: elements.recapNpcsField.value.trim(),
+    locations: elements.recapLocationsField.value.trim(),
+    quests: elements.recapQuestsField.value.trim(),
+    unresolvedThreads: elements.recapThreadsField.value.trim(),
+  };
+}
+
 function updateRecordingDuration() {
   if (!recordingStartedAt) return;
   elements.recordingDuration.textContent = formatDuration((Date.now() - recordingStartedAt) / 1000);
@@ -1090,22 +1354,32 @@ elements.navButtons.forEach((button) => {
 
 elements.memberForm.addEventListener("submit", (event) => {
   event.preventDefault();
+  const maxHealth = Number(elements.maxHealth.value);
+  const currentHealth = clampHealth(elements.currentHealth.value, maxHealth);
   const member = {
     id: elements.memberId.value || createId("member"),
     playerName: elements.playerName.value.trim(),
     characterName: elements.characterName.value.trim(),
     characterRace: elements.characterRace.value.trim(),
     armorClass: Number(elements.armorClass.value),
-    maxHealth: Number(elements.maxHealth.value),
-    voiceSampleId: null,
+    maxHealth,
+    currentHealth,
   };
-  if (!member.playerName || !member.characterName || !member.characterRace || !member.armorClass || !member.maxHealth) return;
+  if (
+    !member.playerName ||
+    !member.characterName ||
+    !member.characterRace ||
+    !member.armorClass ||
+    !member.maxHealth ||
+    elements.currentHealth.value === ""
+  )
+    return;
 
   const existingIndex = state.members.findIndex((entry) => entry.id === member.id);
   if (existingIndex >= 0) {
     state.members[existingIndex] = { ...state.members[existingIndex], ...member };
   } else {
-    state.members.push(member);
+    state.members.push({ ...member, voiceSampleId: null });
   }
 
   elements.memberForm.reset();
@@ -1135,6 +1409,7 @@ elements.memberList.addEventListener("click", (event) => {
     elements.characterRace.value = member.characterRace;
     elements.armorClass.value = member.armorClass || "";
     elements.maxHealth.value = member.maxHealth || "";
+    elements.currentHealth.value = member.currentHealth ?? member.maxHealth ?? "";
     elements.memberFormTitle.textContent = "Edit player character";
     elements.cancelEdit.classList.remove("hidden");
   }
@@ -1438,6 +1713,9 @@ elements.sessionForm.addEventListener("submit", (event) => {
     recording: null,
     transcript: null,
     speakerStats: null,
+    aiStatus: "not-ready",
+    speakerSegments: [],
+    speakerReviewStatus: "manual",
     recap: null,
     createdAt: Date.now(),
   };
@@ -1513,6 +1791,16 @@ elements.campaignList.addEventListener("click", (event) => {
 elements.sessionList.addEventListener("click", (event) => {
   const currentId = event.target.dataset.currentSession;
   const deleteId = event.target.dataset.deleteSession;
+  const viewBattleId = event.target.dataset.viewBattle;
+  const battleSessionId = event.target.dataset.battleSession;
+  if (viewBattleId && battleSessionId) {
+    state.currentSessionId = battleSessionId;
+    highlightedBattleId = viewBattleId;
+    showView("initiative");
+    render();
+    document.querySelector(`#battle-result-${CSS.escape(viewBattleId)}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
   if (currentId) {
     state.currentSessionId = currentId;
     render();
@@ -1528,6 +1816,17 @@ elements.sessionList.addEventListener("click", (event) => {
     }
     render();
   }
+});
+
+elements.battleResultsList.addEventListener("click", (event) => {
+  const battleId = event.target.dataset.deleteBattle;
+  const sessionId = event.target.dataset.battleSession;
+  if (!battleId || !sessionId) return;
+  const session = state.sessions.find((entry) => entry.id === sessionId);
+  if (!session) return;
+  session.combats = (session.combats || []).filter((battle) => battle.id !== battleId);
+  if (highlightedBattleId === battleId) highlightedBattleId = null;
+  render();
 });
 
 elements.startRecording.addEventListener("click", async () => {
@@ -1618,6 +1917,117 @@ elements.saveSpeakerStats.addEventListener("click", () => {
     };
   });
   render();
+});
+
+elements.speakerSegmentForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const session = getCurrentSession();
+  if (!session) return;
+  const speakerLabel = elements.segmentSpeakerLabel.value.trim();
+  const note = elements.segmentNote.value.trim();
+  const minutes = Math.max(0, Number(elements.segmentMinutes.value || 0));
+  if (!speakerLabel && !note && !minutes) return;
+  session.speakerSegments = [
+    ...(session.speakerSegments || []),
+    {
+      id: createId("segment"),
+      speakerLabel: speakerLabel || "Unknown speaker",
+      minutes,
+      note,
+      source: "manual",
+      createdAt: new Date().toISOString(),
+    },
+  ];
+  session.speakerReviewStatus = "manual";
+  elements.speakerSegmentForm.reset();
+  elements.segmentMinutes.value = 0;
+  render();
+});
+
+elements.speakerSegmentList.addEventListener("click", (event) => {
+  const deleteId = event.target.dataset.deleteSegment;
+  const session = getCurrentSession();
+  if (!deleteId || !session) return;
+  session.speakerSegments = (session.speakerSegments || []).filter((segment) => segment.id !== deleteId);
+  render();
+});
+
+elements.transcriptField.addEventListener("input", updateGenerateRecapButton);
+
+elements.saveApiBaseUrl.addEventListener("click", () => {
+  const nextUrl = elements.apiBaseUrl.value.trim().replace(/\/+$/, "");
+  if (!nextUrl) return;
+  API_BASE_URL = nextUrl;
+  localStorage.setItem("dnd-club-api-base-url", API_BASE_URL);
+  const session = getCurrentSession();
+  if (session && session.aiStatus === "error") {
+    session.aiStatus = elements.transcriptField.value.trim() ? "ready" : "not-ready";
+  }
+  render();
+});
+
+elements.clearApiBaseUrl.addEventListener("click", () => {
+  localStorage.removeItem("dnd-club-api-base-url");
+  API_BASE_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+    ? "http://localhost:3001"
+    : "https://your-dnd-club-backend.onrender.com";
+  render();
+});
+
+elements.generateRecap.addEventListener("click", async () => {
+  const session = getCurrentSession();
+  if (!session) return;
+  const transcript = elements.transcriptField.value.trim();
+  if (!transcript) {
+    updateGenerateRecapButton();
+    return;
+  }
+
+  const activeCampaign = getActiveCampaign();
+  const sessionLabel = getSessionLabel(session, getSessionIndex(session));
+  const existingRecap = getCurrentRecapDraft();
+  session.aiStatus = "processing";
+  elements.aiStatus.textContent = formatStatus(session.aiStatus);
+  elements.aiToolsNote.textContent = getAiToolsMessage(session);
+  updateGenerateRecapButton();
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/generate-recap`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        transcript,
+        campaignName: activeCampaign?.name || "Active campaign",
+        sessionLabel,
+        existingRecap,
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || "AI recap generation failed.");
+    }
+
+    elements.recapSummaryField.value = payload.summary || "";
+    elements.recapEventsField.value = payload.events || "";
+    elements.recapNpcsField.value = payload.npcs || "";
+    elements.recapLocationsField.value = payload.locations || "";
+    elements.recapQuestsField.value = payload.quests || "";
+    elements.recapThreadsField.value = payload.unresolvedThreads || "";
+    session.aiStatus = "complete";
+    elements.aiStatus.textContent = formatStatus(session.aiStatus);
+    elements.aiToolsNote.textContent = getAiToolsMessage(session);
+  } catch (error) {
+    session.aiStatus = "error";
+    elements.aiStatus.textContent = formatStatus(session.aiStatus);
+    elements.aiToolsNote.textContent =
+      error.message === "Failed to fetch"
+        ? `Could not reach the AI backend at ${API_BASE_URL}. Start the backend locally or deploy it on Render.`
+        : error.message || getAiToolsMessage(session);
+  } finally {
+    saveState();
+    updateGenerateRecapButton();
+  }
 });
 
 elements.progressForm.addEventListener("submit", (event) => {

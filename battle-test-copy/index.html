@@ -113,6 +113,10 @@
                 Max Health
                 <input id="max-health" type="number" min="1" autocomplete="off" required />
               </label>
+              <label>
+                Current Health
+                <input id="current-health" type="number" min="0" autocomplete="off" required />
+              </label>
               <div class="voice-placeholder">
                 <span>Demo voice</span>
                 <strong>Phase 2</strong>
@@ -231,6 +235,17 @@
               </div>
               <button class="primary-button next-button" id="start-initiative" type="button">Start Battle</button>
             </div>
+
+            <div class="panel wide-panel battle-results-panel">
+              <div class="panel-title-row">
+                <h3>Battle Results</h3>
+                <span id="battle-result-count" class="count-pill">0 saved</span>
+              </div>
+              <div class="empty-state" id="battle-results-empty">
+                Completed battles for the active campaign will appear here.
+              </div>
+              <div class="battle-results-list" id="battle-results-list"></div>
+            </div>
           </div>
         </section>
 
@@ -322,6 +337,28 @@
               <p class="form-note" id="recording-message"></p>
             </div>
 
+            <div class="panel form-panel">
+              <div class="panel-title-row">
+                <h3>Audio processing</h3>
+                <span class="count-pill" id="audio-processing-status">Not uploaded</span>
+              </div>
+              <p class="form-note" id="audio-processing-note">
+                Backend processing will upload audio, transcribe it, and prepare speaker labels later.
+              </p>
+              <div class="recording-status">
+                <span>Recording file</span>
+                <strong id="audio-processing-file">No file yet</strong>
+              </div>
+              <div class="recording-status">
+                <span>Review status</span>
+                <strong id="speaker-review-status">Manual</strong>
+              </div>
+              <div class="button-row">
+                <button class="secondary-button" type="button" disabled>Upload audio - Backend needed</button>
+                <button class="ghost-button" type="button" disabled>Process speakers - Backend needed</button>
+              </div>
+            </div>
+
             <div class="panel">
               <div class="panel-title-row">
                 <h3>Manual speaking time</h3>
@@ -335,6 +372,47 @@
               </div>
               <div class="speaker-list" id="speaker-list"></div>
               <button class="primary-button" id="save-speaker-stats" type="button">Save speaking time</button>
+            </div>
+
+            <div class="panel">
+              <div class="panel-title-row">
+                <h3>Speaking charts</h3>
+                <span class="count-pill">Manual data</span>
+              </div>
+              <p class="form-note">Charts use the minutes saved above until AI speaker timing is connected.</p>
+              <h4>Current session</h4>
+              <div class="chart-list" id="session-speaking-chart"></div>
+              <h4>Active campaign totals</h4>
+              <div class="chart-list" id="campaign-speaking-chart"></div>
+            </div>
+
+            <div class="panel wide-panel">
+              <div class="panel-title-row">
+                <h3>Speaker review</h3>
+                <span id="speaker-segment-count" class="count-pill">0 segments</span>
+              </div>
+              <p class="form-note">
+                Future AI transcript segments will appear here for speaker correction. For now, you can add manual review notes.
+              </p>
+              <form class="speaker-segment-form" id="speaker-segment-form">
+                <label>
+                  Speaker label
+                  <input id="segment-speaker-label" autocomplete="off" placeholder="Anirudh / Kael" />
+                </label>
+                <label>
+                  Minutes
+                  <input id="segment-minutes" type="number" min="0" step="1" value="0" />
+                </label>
+                <label>
+                  Segment note
+                  <input id="segment-note" autocomplete="off" placeholder="Short note from this part of the session" />
+                </label>
+                <button class="secondary-button" type="submit">Add manual segment</button>
+              </form>
+              <div class="empty-state" id="speaker-segments-empty">
+                No speaker review segments yet.
+              </div>
+              <div class="speaker-segment-list" id="speaker-segment-list"></div>
             </div>
           </div>
         </section>
@@ -384,6 +462,26 @@
               </label>
               <button class="primary-button" type="submit">Save session notes</button>
             </form>
+
+            <div class="panel form-panel">
+              <div class="panel-title-row">
+                <h3>AI Session Tools</h3>
+                <span id="ai-status" class="count-pill">Not ready</span>
+              </div>
+              <p class="form-note" id="ai-tools-note">
+                AI recap generation will use the transcript once backend processing is connected. Keep writing or pasting notes manually for now.
+              </p>
+              <label>
+                Backend URL
+                <input id="api-base-url" autocomplete="off" placeholder="https://your-dnd-club-backend.onrender.com" />
+              </label>
+              <div class="button-row compact">
+                <button class="secondary-button" id="save-api-base-url" type="button">Save backend URL</button>
+                <button class="ghost-button" id="clear-api-base-url" type="button">Use default URL</button>
+              </div>
+              <button class="secondary-button" id="generate-recap" type="button">Generate recap from transcript</button>
+              <button class="ghost-button" type="button" disabled>Extract NPCs, quests, and threads - Backend needed</button>
+            </div>
 
             <div class="panel campaign-story-panel">
               <div class="panel-title-row">
