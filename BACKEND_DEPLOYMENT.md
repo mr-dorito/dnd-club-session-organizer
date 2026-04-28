@@ -11,6 +11,7 @@
 4. Add environment variables:
    - `OPENAI_API_KEY`: your OpenAI API key
    - `OPENAI_MODEL`: `gpt-5.2`
+   - `TRANSCRIPTION_MODEL`: `gpt-4o-transcribe`
    - `ALLOWED_ORIGIN`: `*`
 
 ## Connect The App
@@ -20,6 +21,7 @@
 3. Paste the URL into `Backend URL`.
 4. Click `Save backend URL`.
 5. Add a transcript and click `Generate recap from transcript`.
+6. To transcribe audio, open `Speaking Time`, choose a saved recording file, and click `Upload and transcribe`.
 
 ## Local Testing
 
@@ -43,3 +45,5 @@ http://localhost:3001/api/health
 ```
 
 The app automatically uses `http://localhost:3001` when opened from localhost. When opened as a `file://` page, paste `http://localhost:3001` into the app's `Backend URL` field.
+
+Audio transcription accepts `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `wav`, and `webm` files up to 25 MB.

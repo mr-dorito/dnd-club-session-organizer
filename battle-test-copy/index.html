@@ -319,8 +319,11 @@
             <div class="panel form-panel">
               <h3>Session recording</h3>
               <p class="form-note">
-                Audio is recorded locally. Download it after recording and keep the file until backend upload is added.
+                Audio is recorded locally. Download it after recording, then upload the saved file for transcription.
               </p>
+              <button class="manual-mode-toggle" id="speaking-manual-mode" type="button" aria-pressed="true" style="width: fit-content;">
+                Manual Mode: On
+              </button>
               <div class="recording-status">
                 <span>Status</span>
                 <strong id="recording-status">No recording</strong>
@@ -335,6 +338,13 @@
               </div>
               <a class="download-button hidden" id="download-recording" href="#" download>Download audio</a>
               <p class="form-note" id="recording-message"></p>
+              <div class="next-steps hidden" id="recording-next-steps">
+                <strong>Next steps</strong>
+                <div class="button-row compact">
+                  <button class="secondary-button" id="recording-paste-transcript" type="button">Paste transcript</button>
+                  <button class="ghost-button" id="recording-open-notes" type="button">Open Session Notes</button>
+                </div>
+              </div>
             </div>
 
             <div class="panel form-panel">
@@ -343,7 +353,7 @@
                 <span class="count-pill" id="audio-processing-status">Not uploaded</span>
               </div>
               <p class="form-note" id="audio-processing-note">
-                Backend processing will upload audio, transcribe it, and prepare speaker labels later.
+                Upload a saved recording for transcription. Speaker labels still stay manual.
               </p>
               <div class="recording-status">
                 <span>Recording file</span>
@@ -353,10 +363,32 @@
                 <span>Review status</span>
                 <strong id="speaker-review-status">Manual</strong>
               </div>
+              <label>
+                Audio file
+                <input id="audio-upload-file" type="file" accept=".mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm,audio/*" />
+              </label>
               <div class="button-row">
-                <button class="secondary-button" type="button" disabled>Upload audio - Backend needed</button>
+                <button class="secondary-button" id="transcribe-audio" type="button">Upload and transcribe</button>
                 <button class="ghost-button" type="button" disabled>Process speakers - Backend needed</button>
               </div>
+              <p class="form-note" id="audio-upload-message"></p>
+            </div>
+
+            <div class="panel">
+              <div class="panel-title-row">
+                <h3>Manual transcript</h3>
+                <span class="count-pill">Manual Mode</span>
+              </div>
+              <p class="form-note">Paste a transcript here when AI processing is not connected.</p>
+              <label>
+                Paste transcript for this session
+                <textarea id="manual-transcript-field" rows="7" placeholder="Paste the transcript here."></textarea>
+              </label>
+              <div class="button-row compact">
+                <button class="primary-button" id="save-manual-transcript" type="button">Save transcript</button>
+                <button class="ghost-button" id="manual-transcript-open-notes" type="button">Open Session Notes</button>
+              </div>
+              <p class="form-note" id="manual-transcript-message"></p>
             </div>
 
             <div class="panel">
@@ -468,6 +500,9 @@
                 <h3>AI Session Tools</h3>
                 <span id="ai-status" class="count-pill">Not ready</span>
               </div>
+              <button class="manual-mode-toggle" id="progress-manual-mode" type="button" aria-pressed="true" style="width: fit-content;">
+                Manual Mode: On
+              </button>
               <p class="form-note" id="ai-tools-note">
                 AI recap generation will use the transcript once backend processing is connected. Keep writing or pasting notes manually for now.
               </p>
@@ -487,6 +522,10 @@
               <div class="panel-title-row">
                 <h3>Campaign story</h3>
                 <span class="count-pill" id="story-session-count">0 sessions</span>
+              </div>
+              <div class="button-row compact">
+                <button class="secondary-button" id="export-session-markdown" type="button">Export session .md</button>
+                <button class="ghost-button" id="export-campaign-markdown" type="button">Export campaign .md</button>
               </div>
               <div class="empty-state" id="campaign-story-empty">
                 Add session recaps to build the campaign story.

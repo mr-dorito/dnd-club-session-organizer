@@ -10,5 +10,7 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: gpt-5.2
+      - key: TRANSCRIPTION_MODEL
+        value: gpt-4o-transcribe
       - key: ALLOWED_ORIGIN
         value: "*"

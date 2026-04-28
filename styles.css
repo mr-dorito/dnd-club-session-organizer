@@ -613,6 +613,36 @@ textarea {
   margin-bottom: 0;
 }
 
+.manual-mode-toggle {
+  width: fit-content !important;
+  max-width: max-content;
+  min-height: 0;
+  justify-self: start;
+  border: 1px solid rgba(216, 164, 65, 0.35);
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: rgba(216, 164, 65, 0.08) !important;
+  color: var(--parchment) !important;
+  font-family: Arial, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.manual-mode-toggle[aria-pressed="true"] {
+  border-color: var(--gold);
+  color: var(--gold) !important;
+  background: rgba(216, 164, 65, 0.14) !important;
+}
+
+.next-steps {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(216, 164, 65, 0.35);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
 .progress-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.8fr);
@@ -1042,6 +1072,18 @@ textarea {
   border-radius: 6px;
   padding: 8px 10px;
   background: rgba(0, 0, 0, 0.18);
+}
+
+.battle-markdown-preview {
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid rgba(243, 223, 178, 0.18);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--muted);
+  font: 0.88rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .screen-next-button {

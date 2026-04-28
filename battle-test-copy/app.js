@@ -5,6 +5,8 @@ let API_BASE_URL =
   (["localhost", "127.0.0.1"].includes(window.location.hostname)
     ? "http://localhost:3001"
     : "https://your-dnd-club-backend.onrender.com");
+const MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024;
+const SUPPORTED_AUDIO_EXTENSIONS = [".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm"];
 
 const initialState = {
   members: [],
@@ -13,6 +15,9 @@ const initialState = {
   sessions: [],
   currentCampaignId: null,
   currentSessionId: null,
+  settings: {
+    manualMode: true,
+  },
   combat: {
     selectedMemberIds: [],
     monsters: [],
@@ -35,6 +40,7 @@ let recordingChunks = [];
 let recordingStartedAt = null;
 let recordingTimerId = null;
 let recordingDownloadUrl = null;
+let audioUploadStatus = "ready";
 let highlightedBattleId = null;
 
 const elements = {
@@ -131,14 +137,25 @@ const elements = {
   stopRecording: document.querySelector("#stop-recording"),
   downloadRecording: document.querySelector("#download-recording"),
   recordingMessage: document.querySelector("#recording-message"),
+  recordingNextSteps: document.querySelector("#recording-next-steps"),
+  recordingPasteTranscript: document.querySelector("#recording-paste-transcript"),
+  recordingOpenNotes: document.querySelector("#recording-open-notes"),
+  speakingManualMode: document.querySelector("#speaking-manual-mode"),
   audioProcessingStatus: document.querySelector("#audio-processing-status"),
   audioProcessingNote: document.querySelector("#audio-processing-note"),
   audioProcessingFile: document.querySelector("#audio-processing-file"),
   speakerReviewStatus: document.querySelector("#speaker-review-status"),
+  audioUploadFile: document.querySelector("#audio-upload-file"),
+  transcribeAudio: document.querySelector("#transcribe-audio"),
+  audioUploadMessage: document.querySelector("#audio-upload-message"),
   speakerCount: document.querySelector("#speaker-count"),
   speakerEmpty: document.querySelector("#speaker-empty"),
   speakerList: document.querySelector("#speaker-list"),
   saveSpeakerStats: document.querySelector("#save-speaker-stats"),
+  manualTranscriptField: document.querySelector("#manual-transcript-field"),
+  saveManualTranscript: document.querySelector("#save-manual-transcript"),
+  manualTranscriptMessage: document.querySelector("#manual-transcript-message"),
+  manualTranscriptOpenNotes: document.querySelector("#manual-transcript-open-notes"),
   sessionSpeakingChart: document.querySelector("#session-speaking-chart"),
   campaignSpeakingChart: document.querySelector("#campaign-speaking-chart"),
   speakerSegmentCount: document.querySelector("#speaker-segment-count"),
@@ -160,10 +177,13 @@ const elements = {
   aiStatus: document.querySelector("#ai-status"),
   aiToolsNote: document.querySelector("#ai-tools-note"),
   generateRecap: document.querySelector("#generate-recap"),
+  progressManualMode: document.querySelector("#progress-manual-mode"),
   apiBaseUrl: document.querySelector("#api-base-url"),
   saveApiBaseUrl: document.querySelector("#save-api-base-url"),
   clearApiBaseUrl: document.querySelector("#clear-api-base-url"),
   storySessionCount: document.querySelector("#story-session-count"),
+  exportSessionMarkdown: document.querySelector("#export-session-markdown"),
+  exportCampaignMarkdown: document.querySelector("#export-campaign-markdown"),
   campaignStoryEmpty: document.querySelector("#campaign-story-empty"),
   campaignStoryList: document.querySelector("#campaign-story-list"),
 };
@@ -183,6 +203,10 @@ function mergeState(saved) {
   const migrated = {
     ...clone(initialState),
     ...saved,
+    settings: {
+      ...clone(initialState.settings),
+      ...(saved.settings || {}),
+    },
     combat: {
       ...clone(initialState.combat),
       ...(saved.combat || {}),
@@ -520,7 +544,10 @@ function renderBattleResults() {
               <strong>${escapeHtml(battle.name || "Saved battle")}</strong>
               <small>${escapeHtml(getSessionLabel(session, sessionIndex))} - ${escapeHtml(formatDate((battle.endedAt || battle.startedAt || session.date).slice(0, 10)))}</small>
             </div>
-            <button class="icon-button delete-button" type="button" data-delete-battle="${battle.id}" data-battle-session="${session.id}">Del</button>
+            <div class="button-row compact">
+              <button class="icon-button" type="button" data-copy-battle="${battle.id}" data-battle-session="${session.id}">Copy to notes</button>
+              <button class="icon-button delete-button" type="button" data-delete-battle="${battle.id}" data-battle-session="${session.id}">Del</button>
+            </div>
           </div>
           <div class="battle-result-meta">
             <span>${(battle.finalCombatants || []).length} combatants</span>
@@ -546,6 +573,7 @@ function renderBattleResults() {
                 : "<span>No action notes saved.</span>"
             }
           </div>
+          <pre class="battle-markdown-preview">${escapeHtml(buildBattleSummaryMarkdown(battle))}</pre>
         </article>
       `;
     })
@@ -717,21 +745,38 @@ function renderSpeakingTime() {
   const session = getCurrentSession();
   const activeCampaign = getActiveCampaign();
   const speakers = getSpeakers();
+  const manualMode = Boolean(state.settings.manualMode);
   elements.speakingSessionContext.textContent = session
     ? `Speaking time for ${getSessionLabel(session, getSessionIndex(session))} in ${activeCampaign?.name || "the active campaign"}.`
     : "Create or select a session to record audio and track speaking time.";
 
+  updateManualModeButton(elements.speakingManualMode);
   const recording = session?.recording || null;
   elements.recordingStatus.textContent = recording?.status || "No recording";
   elements.recordingDuration.textContent = formatDuration(recording?.durationSeconds || 0);
   elements.audioProcessingStatus.textContent = getAudioProcessingStatus(session);
   elements.audioProcessingFile.textContent = recording?.fileName || "No file yet";
   elements.speakerReviewStatus.textContent = formatStatus(session?.speakerReviewStatus || "manual");
-  elements.audioProcessingNote.textContent = session
-    ? "Backend processing will upload audio, transcribe it, and prepare speaker labels later."
-    : "Create or select a session before preparing audio for backend processing.";
+  elements.audioProcessingNote.textContent = getAudioProcessingMessage(session);
   elements.startRecording.disabled = !session || Boolean(mediaRecorder);
   elements.stopRecording.disabled = !mediaRecorder;
+  elements.recordingNextSteps.classList.toggle("hidden", recording?.status !== "ready to download");
+  elements.audioUploadFile.disabled =
+    !session || manualMode || audioUploadStatus === "uploading" || audioUploadStatus === "transcribing";
+  elements.transcribeAudio.disabled =
+    !session || manualMode || audioUploadStatus === "uploading" || audioUploadStatus === "transcribing";
+  elements.transcribeAudio.textContent =
+    manualMode
+      ? "Manual Mode enabled"
+      : audioUploadStatus === "uploading" || audioUploadStatus === "transcribing"
+      ? "Transcribing..."
+      : "Upload and transcribe";
+  elements.manualTranscriptField.disabled = !session;
+  elements.manualTranscriptField.value = session?.transcript || "";
+  elements.saveManualTranscript.disabled = !session;
+  elements.manualTranscriptOpenNotes.disabled = !session;
+  elements.recordingPasteTranscript.disabled = !session;
+  elements.recordingOpenNotes.disabled = !session;
   elements.saveSpeakerStats.disabled = !session;
   elements.speakerCount.textContent = `${speakers.length} speaker${speakers.length === 1 ? "" : "s"}`;
   elements.speakerEmpty.classList.toggle("hidden", speakers.length > 0);
@@ -765,9 +810,11 @@ function renderProgressNotes() {
   const session = getCurrentSession();
   const activeCampaign = getActiveCampaign();
   const activeSessions = getCampaignSessions(state, state.currentCampaignId);
+  const manualMode = Boolean(state.settings.manualMode);
   elements.progressSessionContext.textContent = session
     ? `Notes for ${getSessionLabel(session, getSessionIndex(session))} in ${activeCampaign?.name || "the active campaign"}.`
     : "Create or select a session to write transcripts, recaps, and campaign notes.";
+  updateManualModeButton(elements.progressManualMode);
   elements.apiBaseUrl.value = API_BASE_URL;
   elements.aiStatus.textContent = formatStatus(session?.aiStatus || "not-ready");
   elements.aiToolsNote.textContent = session
@@ -796,6 +843,8 @@ function renderProgressNotes() {
     field.disabled = disabled;
   });
   elements.progressForm.querySelector("button").disabled = disabled;
+  elements.exportSessionMarkdown.disabled = !session;
+  elements.exportCampaignMarkdown.disabled = !activeCampaign;
   updateGenerateRecapButton();
 
   const sessionsWithRecaps = activeSessions.filter((entry) => normalizeRecap(entry.recap).summary.trim());
@@ -1239,6 +1288,102 @@ function getCampaignDms(campaign) {
   return ids.map((id) => state.dms.find((dm) => dm.id === id)).filter(Boolean);
 }
 
+function buildBattleSummaryMarkdown(battle) {
+  const finalCombatants = battle.finalCombatants || [];
+  const defeated = finalCombatants
+    .filter((combatant) => combatant.defeated || Number(combatant.currentHealth) <= 0)
+    .map((combatant) => combatant.displayName);
+  const lines = [
+    `### ${battle.name || "Battle"}`,
+    `- Result: ${battle.summary || `${finalCombatants.length} combatants`}`,
+    `- Defeated: ${defeated.length ? defeated.join(", ") : "None"}`,
+    "- Final HP:",
+    ...finalCombatants.map((combatant) => {
+      const starting = combatant.startingHealth ?? combatant.maxHealth;
+      return `  - ${combatant.displayName}: ${starting}/${combatant.maxHealth} to ${combatant.currentHealth}/${combatant.maxHealth}`;
+    }),
+  ];
+  const actions = (battle.actions || []).slice(-6);
+  if (actions.length) {
+    lines.push("- Action notes:", ...actions.map((action) => `  - ${action.text}`));
+  }
+  return lines.join("\n");
+}
+
+function buildSessionMarkdown(session) {
+  const campaign = state.campaigns.find((entry) => entry.id === session.campaignId);
+  const recap = normalizeRecap(session.recap);
+  const label = getSessionLabel(session, getSessionIndex(session));
+  const speakers = session.speakerStats || [];
+  const battles = (session.combats || []).filter((battle) => battle.id !== "current-combat" && battle.status === "completed");
+  return [
+    `# ${label}`,
+    "",
+    `Campaign: ${campaign?.name || "Unknown campaign"}`,
+    `Date: ${formatDate(session.date)}`,
+    "",
+    "## Recap",
+    recap.summary || "No recap saved.",
+    "",
+    "## Important Events",
+    recap.events || "None saved.",
+    "",
+    "## NPCs",
+    recap.npcs || "None saved.",
+    "",
+    "## Locations",
+    recap.locations || "None saved.",
+    "",
+    "## Quests",
+    recap.quests || "None saved.",
+    "",
+    "## Unresolved Threads",
+    recap.unresolvedThreads || "None saved.",
+    "",
+    "## Speaking Time",
+    speakers.length ? speakers.map((speaker) => `- ${speaker.name}: ${speaker.minutes} min`).join("\n") : "No speaking time saved.",
+    "",
+    "## Battle Results",
+    battles.length ? battles.map(buildBattleSummaryMarkdown).join("\n\n") : "No battle results saved.",
+    "",
+    "## Transcript",
+    session.transcript || "No transcript saved.",
+    "",
+  ].join("\n");
+}
+
+function buildCampaignMarkdown(campaign) {
+  const sessions = getCampaignSessions(state, campaign.id);
+  return [
+    `# ${campaign.name}`,
+    "",
+    `Dungeon Masters: ${formatNameList(getCampaignDms(campaign).map((dm) => dm.name)) || "None saved"}`,
+    `Sessions: ${sessions.length}`,
+    "",
+    ...sessions.map(buildSessionMarkdown),
+  ].join("\n\n");
+}
+
+function downloadTextFile(fileName, content) {
+  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function slugifyFileName(value) {
+  return String(value || "dnd-notes")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "dnd-notes";
+}
+
 function getCampaignDisplayTitle(campaign) {
   const dms = getCampaignDms(campaign).map((dm) => dm.name);
   if (dms.length) {
@@ -1291,13 +1436,35 @@ function formatStatus(status) {
 
 function getAudioProcessingStatus(session) {
   if (!session) return "Not uploaded";
-  if (session.aiStatus && session.aiStatus !== "not-ready") return formatStatus(session.aiStatus);
+  if (state.settings.manualMode) return "Manual Mode";
+  if (audioUploadStatus === "uploading") return "Uploading";
+  if (audioUploadStatus === "transcribing") return "Transcribing";
+  if (audioUploadStatus === "error") return "Error";
+  if (session.recording?.status === "transcribed") return "Complete";
   if (session.recording?.status === "saved") return "Ready for backend";
+  if (session.recording?.status === "ready to download") return "Ready";
   if (session.recording?.status === "recording") return "Recording";
   return "Not uploaded";
 }
 
+function getAudioProcessingMessage(session) {
+  if (!session) return "Create or select a session before preparing audio.";
+  if (state.settings.manualMode) {
+    return "Manual Mode is on. Record and download audio, then paste transcripts manually until an AI backend is connected.";
+  }
+  return `Upload a saved recording to ${API_BASE_URL} for transcription. Speaker labels still stay manual.`;
+}
+
+function updateManualModeButton(button) {
+  const enabled = Boolean(state.settings.manualMode);
+  button.setAttribute("aria-pressed", String(enabled));
+  button.textContent = enabled ? "Manual Mode: On" : "Manual Mode: Off";
+}
+
 function getAiToolsMessage(session) {
+  if (state.settings.manualMode) {
+    return "Manual Mode is on. Paste transcripts and write recaps manually until an AI backend is connected.";
+  }
   if (session.aiStatus === "processing") return "Generating a structured recap from the transcript.";
   if (session.aiStatus === "complete") return "AI recap fields were generated. Review them, then save the notes.";
   if (session.aiStatus === "error") return "AI recap generation failed. Existing notes were kept, and you can try again.";
@@ -1308,9 +1475,11 @@ function updateGenerateRecapButton() {
   if (!elements.generateRecap) return;
   const session = getCurrentSession();
   const transcript = elements.transcriptField?.value.trim() || "";
-  const disabled = !session || !transcript || session.aiStatus === "processing";
+  const disabled = state.settings.manualMode || !session || !transcript || session.aiStatus === "processing";
   elements.generateRecap.disabled = disabled;
-  if (!session) {
+  if (state.settings.manualMode) {
+    elements.generateRecap.textContent = "Manual Mode enabled";
+  } else if (!session) {
     elements.generateRecap.textContent = "Generate recap from transcript";
   } else if (session.aiStatus === "processing") {
     elements.generateRecap.textContent = "Generating recap...";
@@ -1819,8 +1988,23 @@ elements.sessionList.addEventListener("click", (event) => {
 });
 
 elements.battleResultsList.addEventListener("click", (event) => {
+  const copyBattleId = event.target.dataset.copyBattle;
   const battleId = event.target.dataset.deleteBattle;
   const sessionId = event.target.dataset.battleSession;
+  if (copyBattleId && sessionId) {
+    const session = state.sessions.find((entry) => entry.id === sessionId);
+    const battle = session?.combats?.find((entry) => entry.id === copyBattleId);
+    if (!session || !battle) return;
+    const recap = normalizeRecap(session.recap);
+    const summary = buildBattleSummaryMarkdown(battle);
+    session.recap = {
+      ...recap,
+      events: [recap.events, summary].filter(Boolean).join("\n\n"),
+    };
+    render();
+    showView("progress");
+    return;
+  }
   if (!battleId || !sessionId) return;
   const session = state.sessions.find((entry) => entry.id === sessionId);
   if (!session) return;
@@ -1901,6 +2085,128 @@ elements.stopRecording.addEventListener("click", () => {
   }
 });
 
+function setManualMode(enabled) {
+  state.settings.manualMode = Boolean(enabled);
+  if (state.settings.manualMode) {
+    audioUploadStatus = "ready";
+  }
+  render();
+}
+
+elements.speakingManualMode.addEventListener("click", () => {
+  setManualMode(!state.settings.manualMode);
+});
+
+elements.progressManualMode.addEventListener("click", () => {
+  setManualMode(!state.settings.manualMode);
+});
+
+function openSessionNotes() {
+  showView("progress");
+  renderProgressNotes();
+}
+
+elements.recordingPasteTranscript.addEventListener("click", () => {
+  elements.manualTranscriptField.focus();
+});
+
+elements.recordingOpenNotes.addEventListener("click", openSessionNotes);
+elements.manualTranscriptOpenNotes.addEventListener("click", openSessionNotes);
+
+elements.saveManualTranscript.addEventListener("click", () => {
+  const session = getCurrentSession();
+  if (!session) return;
+  session.transcript = elements.manualTranscriptField.value.trim();
+  session.aiStatus = session.transcript ? "ready" : "not-ready";
+  elements.manualTranscriptMessage.textContent = session.transcript
+    ? "Transcript saved to Session Notes."
+    : "Transcript cleared for this session.";
+  render();
+});
+
+elements.transcribeAudio.addEventListener("click", async () => {
+  const session = getCurrentSession();
+  if (!session) return;
+  if (state.settings.manualMode) {
+    elements.audioUploadMessage.textContent = "Manual Mode is on. Paste a transcript manually or turn Manual Mode off to use AI processing.";
+    return;
+  }
+
+  const file = elements.audioUploadFile.files?.[0];
+  if (!file) {
+    elements.audioUploadMessage.textContent = "Choose a downloaded recording file first.";
+    return;
+  }
+
+  const fileName = file.name || "session-audio";
+  const extension = `.${fileName.split(".").pop().toLowerCase()}`;
+  if (!SUPPORTED_AUDIO_EXTENSIONS.includes(extension)) {
+    elements.audioUploadMessage.textContent = "Use mp3, mp4, mpeg, mpga, m4a, wav, or webm audio.";
+    audioUploadStatus = "error";
+    render();
+    return;
+  }
+
+  if (file.size > MAX_AUDIO_UPLOAD_BYTES) {
+    elements.audioUploadMessage.textContent = "Audio files must be 25 MB or smaller for this transcription step.";
+    audioUploadStatus = "error";
+    render();
+    return;
+  }
+
+  const activeCampaign = getActiveCampaign();
+  const sessionLabel = getSessionLabel(session, getSessionIndex(session));
+  const formData = new FormData();
+  formData.append("audio", file);
+  formData.append("campaignName", activeCampaign?.name || "Active campaign");
+  formData.append("sessionLabel", sessionLabel);
+
+  audioUploadStatus = "uploading";
+  elements.audioUploadMessage.textContent = "Uploading audio for transcription.";
+  render();
+
+  try {
+    audioUploadStatus = "transcribing";
+    elements.audioUploadMessage.textContent = "Transcribing audio. This can take a little while.";
+    renderSpeakingTime();
+
+    const response = await fetch(`${API_BASE_URL}/api/transcribe-session-audio`, {
+      method: "POST",
+      body: formData,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || "Audio transcription failed.");
+    }
+
+    const transcript = String(payload.transcript || "").trim();
+    if (!transcript) {
+      throw new Error("The transcription finished, but no transcript text came back.");
+    }
+
+    session.transcript = transcript;
+    session.aiStatus = "ready";
+    session.recording = {
+      ...(normalizeRecording(session.recording) || {}),
+      status: "transcribed",
+      durationSeconds: Number(payload.durationSeconds || session.recording?.durationSeconds || 0),
+      fileName: payload.fileName || fileName,
+    };
+    audioUploadStatus = "complete";
+    elements.audioUploadFile.value = "";
+    elements.audioUploadMessage.textContent = "Transcript added to Session Notes. Review it, then save notes.";
+    render();
+  } catch (error) {
+    audioUploadStatus = "error";
+    elements.audioUploadMessage.textContent =
+      error.message === "Failed to fetch"
+        ? `Could not reach the AI backend at ${API_BASE_URL}.`
+        : error.message || "Audio transcription failed.";
+    renderSpeakingTime();
+    saveState();
+  }
+});
+
 elements.saveSpeakerStats.addEventListener("click", () => {
   const session = getCurrentSession();
   if (!session) return;
@@ -1977,6 +2283,10 @@ elements.clearApiBaseUrl.addEventListener("click", () => {
 elements.generateRecap.addEventListener("click", async () => {
   const session = getCurrentSession();
   if (!session) return;
+  if (state.settings.manualMode) {
+    elements.aiToolsNote.textContent = "Manual Mode is on. Turn it off to use AI recap generation.";
+    return;
+  }
   const transcript = elements.transcriptField.value.trim();
   if (!transcript) {
     updateGenerateRecapButton();
@@ -2044,6 +2354,19 @@ elements.progressForm.addEventListener("submit", (event) => {
     unresolvedThreads: elements.recapThreadsField.value.trim(),
   };
   render();
+});
+
+elements.exportSessionMarkdown.addEventListener("click", () => {
+  const session = getCurrentSession();
+  if (!session) return;
+  const fileName = `${slugifyFileName(getSessionLabel(session, getSessionIndex(session)))}.md`;
+  downloadTextFile(fileName, buildSessionMarkdown(session));
+});
+
+elements.exportCampaignMarkdown.addEventListener("click", () => {
+  const campaign = getActiveCampaign();
+  if (!campaign) return;
+  downloadTextFile(`${slugifyFileName(campaign.name)}-campaign-story.md`, buildCampaignMarkdown(campaign));
 });
 
 render();
