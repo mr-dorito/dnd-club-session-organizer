@@ -512,6 +512,7 @@ textarea {
 }
 
 .recording-status,
+.ai-setup-row,
 .speaker-row,
 .story-card {
   border: 1px solid rgba(243, 223, 178, 0.18);
@@ -520,7 +521,8 @@ textarea {
   background: rgba(15, 13, 10, 0.35);
 }
 
-.recording-status {
+.recording-status,
+.ai-setup-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -528,13 +530,24 @@ textarea {
 }
 
 .recording-status span,
+.ai-setup-row span,
 .speaker-row small,
 .story-card p {
   color: var(--muted);
 }
 
-.recording-status strong {
+.recording-status strong,
+.ai-setup-row strong {
   color: var(--gold);
+}
+
+.ai-setup-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-setup-row strong {
+  text-align: right;
 }
 
 .speaker-row {

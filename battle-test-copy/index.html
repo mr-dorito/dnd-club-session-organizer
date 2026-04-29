@@ -519,6 +519,44 @@
               <button class="ghost-button" type="button" disabled>Extract NPCs, quests, and threads - Backend needed</button>
             </div>
 
+            <div class="panel form-panel">
+              <div class="panel-title-row">
+                <h3>AI Setup Status</h3>
+                <span id="ai-setup-status" class="count-pill">Not checked</span>
+              </div>
+              <p class="form-note" id="ai-setup-message">Check the backend before using AI recap or transcription.</p>
+              <div class="ai-setup-list">
+                <div class="ai-setup-row">
+                  <span>Manual Mode</span>
+                  <strong id="ai-setup-manual-mode">Unknown</strong>
+                </div>
+                <div class="ai-setup-row">
+                  <span>Backend URL</span>
+                  <strong id="ai-setup-backend-url">Unknown</strong>
+                </div>
+                <div class="ai-setup-row">
+                  <span>Backend health</span>
+                  <strong id="ai-setup-backend-health">Not checked</strong>
+                </div>
+                <div class="ai-setup-row">
+                  <span>OpenAI key</span>
+                  <strong id="ai-setup-openai-key">Unknown</strong>
+                </div>
+                <div class="ai-setup-row">
+                  <span>Recap generation</span>
+                  <strong id="ai-setup-recap-ready">Not ready</strong>
+                </div>
+                <div class="ai-setup-row">
+                  <span>Audio transcription</span>
+                  <strong id="ai-setup-transcription-ready">Not ready</strong>
+                </div>
+              </div>
+              <div class="button-row compact">
+                <button class="secondary-button" id="check-ai-setup" type="button">Check AI setup</button>
+              </div>
+              <p class="form-note" id="ai-setup-checked-at">Last checked: never</p>
+            </div>
+
             <div class="panel campaign-story-panel">
               <div class="panel-title-row">
                 <h3>Campaign story</h3>

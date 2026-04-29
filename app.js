@@ -17,6 +17,13 @@ const initialState = {
   currentSessionId: null,
   settings: {
     manualMode: true,
+    aiSetup: {
+      lastCheckedAt: null,
+      backendReachable: null,
+      hasOpenAIKey: null,
+      message: "AI setup has not been checked yet.",
+      service: "",
+    },
   },
   combat: {
     selectedMemberIds: [],
@@ -182,6 +189,16 @@ const elements = {
   apiBaseUrl: document.querySelector("#api-base-url"),
   saveApiBaseUrl: document.querySelector("#save-api-base-url"),
   clearApiBaseUrl: document.querySelector("#clear-api-base-url"),
+  aiSetupStatus: document.querySelector("#ai-setup-status"),
+  checkAiSetup: document.querySelector("#check-ai-setup"),
+  aiSetupMessage: document.querySelector("#ai-setup-message"),
+  aiSetupManualMode: document.querySelector("#ai-setup-manual-mode"),
+  aiSetupBackendUrl: document.querySelector("#ai-setup-backend-url"),
+  aiSetupBackendHealth: document.querySelector("#ai-setup-backend-health"),
+  aiSetupOpenAiKey: document.querySelector("#ai-setup-openai-key"),
+  aiSetupRecapReady: document.querySelector("#ai-setup-recap-ready"),
+  aiSetupTranscriptionReady: document.querySelector("#ai-setup-transcription-ready"),
+  aiSetupCheckedAt: document.querySelector("#ai-setup-checked-at"),
   storySessionCount: document.querySelector("#story-session-count"),
   exportSessionMarkdown: document.querySelector("#export-session-markdown"),
   exportCampaignMarkdown: document.querySelector("#export-campaign-markdown"),
@@ -212,6 +229,10 @@ function mergeState(saved) {
       ...clone(initialState.combat),
       ...(saved.combat || {}),
     },
+  };
+  migrated.settings.aiSetup = {
+    ...clone(initialState.settings.aiSetup),
+    ...(saved.settings?.aiSetup || {}),
   };
   migrated.combat = normalizeCombat(migrated.combat);
   migrateCampaigns(migrated);
@@ -848,6 +869,7 @@ function renderProgressNotes() {
   elements.exportSessionMarkdown.disabled = !session;
   elements.exportCampaignMarkdown.disabled = !activeCampaign;
   updateGenerateRecapButton();
+  renderAiSetupStatus(session);
 
   const sessionsWithRecaps = activeSessions.filter((entry) => normalizeRecap(entry.recap).summary.trim());
   elements.storySessionCount.textContent = `${sessionsWithRecaps.length} session${sessionsWithRecaps.length === 1 ? "" : "s"}`;
@@ -1502,6 +1524,64 @@ function updateGenerateRecapButton() {
   } else {
     elements.generateRecap.textContent = "Generate recap from transcript";
   }
+}
+
+function renderAiSetupStatus(session) {
+  const setup = state.settings.aiSetup || clone(initialState.settings.aiSetup);
+  const hasBackendUrl = Boolean(API_BASE_URL);
+  const backendReady = setup.backendReachable === true;
+  const keyReady = setup.hasOpenAIKey === true;
+  const manualMode = Boolean(state.settings.manualMode);
+  const transcriptReady = Boolean(session && (elements.transcriptField?.value || session.transcript || "").trim());
+  const aiReady = hasBackendUrl && backendReady && keyReady && !manualMode;
+  const recapReady = aiReady && transcriptReady;
+  const transcriptionReady = aiReady && Boolean(session);
+
+  elements.aiSetupStatus.textContent = backendReady && keyReady ? "Connected" : backendReady ? "Needs key" : "Not checked";
+  elements.aiSetupMessage.textContent = getAiSetupMessage(setup, {
+    manualMode,
+    hasBackendUrl,
+    backendReady,
+    keyReady,
+    transcriptReady,
+    sessionReady: Boolean(session),
+  });
+  elements.aiSetupManualMode.textContent = manualMode ? "On - AI disabled" : "Off - AI allowed";
+  elements.aiSetupBackendUrl.textContent = hasBackendUrl ? "Saved" : "Missing";
+  elements.aiSetupBackendHealth.textContent =
+    setup.backendReachable === true ? "Connected" : setup.backendReachable === false ? "Unreachable" : "Not checked";
+  elements.aiSetupOpenAiKey.textContent =
+    setup.hasOpenAIKey === true ? "Connected" : setup.hasOpenAIKey === false ? "Missing" : "Unknown";
+  elements.aiSetupRecapReady.textContent = recapReady
+    ? "Ready"
+    : !session
+      ? "Needs session"
+      : !transcriptReady
+        ? "Needs transcript"
+        : !aiReady
+          ? "Not ready"
+          : "Ready";
+  elements.aiSetupTranscriptionReady.textContent = transcriptionReady
+    ? "Ready after choosing audio"
+    : !session
+      ? "Needs session"
+      : "Not ready";
+  elements.aiSetupCheckedAt.textContent = setup.lastCheckedAt
+    ? `Last checked: ${new Date(setup.lastCheckedAt).toLocaleString()}`
+    : "Last checked: never";
+  elements.checkAiSetup.disabled = setup.message === "Checking AI setup...";
+}
+
+function getAiSetupMessage(setup, details) {
+  if (setup.message === "Checking AI setup...") return setup.message;
+  if (!details.hasBackendUrl) return "Add a backend URL before checking AI setup.";
+  if (setup.backendReachable === false) return setup.message || "Backend could not be reached.";
+  if (setup.hasOpenAIKey === false) return "Backend is reachable, but the OpenAI API key is missing on Render.";
+  if (details.manualMode && details.backendReady && details.keyReady) {
+    return "Backend and OpenAI are connected. Turn Manual Mode off to use AI features.";
+  }
+  if (details.backendReady && details.keyReady) return "Backend and OpenAI are connected.";
+  return setup.message || "Check the backend before using AI recap or transcription.";
 }
 
 function getCurrentRecapDraft() {
@@ -2278,13 +2358,20 @@ elements.speakerSegmentList.addEventListener("click", (event) => {
   render();
 });
 
-elements.transcriptField.addEventListener("input", updateGenerateRecapButton);
+elements.transcriptField.addEventListener("input", () => {
+  updateGenerateRecapButton();
+  renderAiSetupStatus(getCurrentSession());
+});
 
 elements.saveApiBaseUrl.addEventListener("click", () => {
   const nextUrl = elements.apiBaseUrl.value.trim().replace(/\/+$/, "");
   if (!nextUrl) return;
   API_BASE_URL = nextUrl;
   localStorage.setItem("dnd-club-api-base-url", API_BASE_URL);
+  state.settings.aiSetup = {
+    ...clone(initialState.settings.aiSetup),
+    message: "Backend URL saved. Run Check AI setup to verify it.",
+  };
   const session = getCurrentSession();
   if (session && session.aiStatus === "error") {
     session.aiStatus = elements.transcriptField.value.trim() ? "ready" : "not-ready";
@@ -2297,6 +2384,47 @@ elements.clearApiBaseUrl.addEventListener("click", () => {
   API_BASE_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
     ? "http://localhost:3001"
     : "https://dnd-club-session-organizer.onrender.com";
+  state.settings.aiSetup = {
+    ...clone(initialState.settings.aiSetup),
+    message: "Default backend URL restored. Run Check AI setup to verify it.",
+  };
+  render();
+});
+
+elements.checkAiSetup.addEventListener("click", async () => {
+  state.settings.aiSetup = {
+    ...(state.settings.aiSetup || clone(initialState.settings.aiSetup)),
+    message: "Checking AI setup...",
+  };
+  renderProgressNotes();
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/health`);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.error || "Backend health check failed.");
+    }
+    state.settings.aiSetup = {
+      lastCheckedAt: new Date().toISOString(),
+      backendReachable: true,
+      hasOpenAIKey: Boolean(payload.hasOpenAIKey),
+      service: payload.service || "D&D Club AI backend",
+      message: payload.hasOpenAIKey
+        ? "Backend and OpenAI are connected."
+        : "Backend is reachable, but the OpenAI API key is missing on Render.",
+    };
+  } catch (error) {
+    state.settings.aiSetup = {
+      lastCheckedAt: new Date().toISOString(),
+      backendReachable: false,
+      hasOpenAIKey: null,
+      service: "",
+      message:
+        error.message === "Failed to fetch"
+          ? "Could not reach the backend. Check the Backend URL or wake up the Render service."
+          : error.message || "Could not check AI setup.",
+    };
+  }
   render();
 });
 
