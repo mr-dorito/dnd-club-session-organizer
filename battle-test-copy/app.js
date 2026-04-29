@@ -4,7 +4,7 @@ let API_BASE_URL =
   localStorage.getItem("dnd-club-api-base-url") ||
   (["localhost", "127.0.0.1"].includes(window.location.hostname)
     ? "http://localhost:3001"
-    : "https://your-dnd-club-backend.onrender.com");
+    : "https://dnd-club-session-organizer.onrender.com");
 const MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024;
 const SUPPORTED_AUDIO_EXTENSIONS = [".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm"];
 
@@ -1463,12 +1463,12 @@ function updateManualModeButton(button) {
 
 function getAiToolsMessage(session) {
   if (state.settings.manualMode) {
-    return "Manual Mode is on. Paste transcripts and write recaps manually until an AI backend is connected.";
+    return "Manual Mode is on. Turn it off to use the deployed AI backend, or keep writing notes manually.";
   }
   if (session.aiStatus === "processing") return "Generating a structured recap from the transcript.";
   if (session.aiStatus === "complete") return "AI recap fields were generated. Review them, then save the notes.";
   if (session.aiStatus === "error") return "AI recap generation failed. Existing notes were kept, and you can try again.";
-  return `AI recap generation sends the transcript to ${API_BASE_URL}. Review generated fields before saving.`;
+  return `AI recap generation sends the transcript to ${API_BASE_URL}. The public website uses the deployed Render backend by default.`;
 }
 
 function updateGenerateRecapButton() {
@@ -2276,7 +2276,7 @@ elements.clearApiBaseUrl.addEventListener("click", () => {
   localStorage.removeItem("dnd-club-api-base-url");
   API_BASE_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
     ? "http://localhost:3001"
-    : "https://your-dnd-club-backend.onrender.com";
+    : "https://dnd-club-session-organizer.onrender.com";
   render();
 });
 
