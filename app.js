@@ -31,6 +31,7 @@ const initialState = {
     selectedTargetId: null,
     selectedTargetIds: [],
     pendingDamageTargets: [],
+    damageMode: "attack",
   },
 };
 
@@ -288,6 +289,7 @@ function normalizeCombat(combat) {
     actions: Array.isArray(combat.actions) ? combat.actions : [],
     pendingDamageTargets: Array.isArray(combat.pendingDamageTargets) ? combat.pendingDamageTargets : [],
     selectedTargetIds: Array.isArray(combat.selectedTargetIds) ? combat.selectedTargetIds : [],
+    damageMode: combat.damageMode || "attack",
   };
 }
 
@@ -1029,6 +1031,7 @@ function resetBattleActionState() {
   state.combat.selectedTargetId = null;
   state.combat.selectedTargetIds = [];
   state.combat.pendingDamageTargets = [];
+  state.combat.damageMode = "attack";
 }
 
 function getAvailableTargets() {
@@ -1056,7 +1059,7 @@ function renderBattleActionUi() {
     const targets = getAvailableTargets();
     const multi = mode === "multi-target";
     elements.battleActionMessage.textContent = multi
-      ? "Choose one or more targets for the multi-attack spell."
+      ? "Choose one or more targets for the multi-attack."
       : "Choose one target to attack.";
     elements.battleTargetList.innerHTML = targets
       .map(
@@ -1078,9 +1081,9 @@ function renderBattleActionUi() {
   }
 
   if (mode === "target-selected") {
-    const target = state.combat.combatants.find((entry) => entry.id === state.combat.selectedTargetId);
-    elements.battleActionMessage.textContent = target
-      ? `${target.displayName}'s Armor Class is ${target.armorClass}. Did the roll pass, fail, or use a spell?`
+    const targets = getSelectedBattleTargets();
+    elements.battleActionMessage.textContent = targets.length
+      ? `${targets.map((target) => `${target.displayName}'s Armor Class is ${target.armorClass}`).join(". ")}. Did the roll pass, fail, or use a spell?`
       : "Choose the roll result.";
     elements.battleTargetList.innerHTML = "";
     return;
@@ -1116,6 +1119,17 @@ function resetBattleActionUi(message) {
 function getCurrentPendingTarget() {
   const targetId = state.combat.pendingDamageTargets[0] || state.combat.selectedTargetId;
   return state.combat.combatants.find((entry) => entry.id === targetId) || null;
+}
+
+function getSelectedBattleTargets() {
+  const targetIds = state.combat.selectedTargetIds.length
+    ? state.combat.selectedTargetIds
+    : state.combat.selectedTargetId
+      ? [state.combat.selectedTargetId]
+      : [];
+  return targetIds
+    .map((targetId) => state.combat.combatants.find((entry) => entry.id === targetId))
+    .filter(Boolean);
 }
 
 function logBattleAction(text) {
@@ -1744,11 +1758,13 @@ elements.battleOther.addEventListener("click", () => {
 elements.battleAttack.addEventListener("click", () => {
   state.combat.actionMode = "attack-target";
   state.combat.selectedTargetId = null;
+  state.combat.selectedTargetIds = [];
   renderInitiativeScreen();
 });
 
 elements.battleMultiAttack.addEventListener("click", () => {
   state.combat.actionMode = "multi-target";
+  state.combat.selectedTargetId = null;
   state.combat.selectedTargetIds = [];
   renderInitiativeScreen();
 });
@@ -1772,28 +1788,32 @@ elements.battleTargetList.addEventListener("change", (event) => {
 elements.battleTargetList.addEventListener("click", (event) => {
   if (event.target.id !== "confirm-multi-targets") return;
   if (!state.combat.selectedTargetIds.length) return;
-  state.combat.pendingDamageTargets = [...state.combat.selectedTargetIds];
-  state.combat.actionMode = "spell-save";
+  state.combat.actionMode = "target-selected";
   logBattleAction(`Multi-attack targets: ${state.combat.selectedTargetIds.map(getCombatantName).join(", ")}.`);
   renderInitiativeScreen();
 });
 
 elements.battlePass.addEventListener("click", () => {
-  if (!state.combat.selectedTargetId) return;
-  state.combat.pendingDamageTargets = [state.combat.selectedTargetId];
+  const targets = getSelectedBattleTargets();
+  if (!targets.length) return;
+  state.combat.pendingDamageTargets = targets.map((target) => target.id);
+  state.combat.damageMode = "attack";
   state.combat.actionMode = "damage";
-  logBattleAction(`Attack passed against ${getCombatantName(state.combat.selectedTargetId)}.`);
+  logBattleAction(`${targets.length > 1 ? "Multi-attack" : "Attack"} passed against ${targets.map((target) => target.displayName).join(", ")}.`);
   renderInitiativeScreen();
 });
 
 elements.battleFail.addEventListener("click", () => {
-  logBattleAction(`Attack failed against ${getCombatantName(state.combat.selectedTargetId)}.`);
+  const targets = getSelectedBattleTargets();
+  logBattleAction(`${targets.length > 1 ? "Multi-attack" : "Attack"} failed against ${targets.map((target) => target.displayName).join(", ")}.`);
   advanceTurn();
 });
 
 elements.battleSpell.addEventListener("click", () => {
-  if (!state.combat.selectedTargetId) return;
-  state.combat.pendingDamageTargets = [state.combat.selectedTargetId];
+  const targets = getSelectedBattleTargets();
+  if (!targets.length) return;
+  state.combat.pendingDamageTargets = targets.map((target) => target.id);
+  state.combat.damageMode = "spell";
   state.combat.actionMode = "spell-save";
   renderInitiativeScreen();
 });
@@ -1826,7 +1846,7 @@ elements.damageForm.addEventListener("submit", (event) => {
   elements.damageAmount.value = 0;
   state.combat.pendingDamageTargets.shift();
   if (state.combat.pendingDamageTargets.length) {
-    state.combat.actionMode = "spell-save";
+    state.combat.actionMode = state.combat.damageMode === "spell" ? "spell-save" : "damage";
     render();
   } else {
     advanceTurn();
