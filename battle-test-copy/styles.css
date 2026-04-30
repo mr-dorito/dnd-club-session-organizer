@@ -571,7 +571,7 @@ textarea {
 
 .chart-row {
   display: grid;
-  grid-template-columns: minmax(120px, 0.8fr) minmax(140px, 1fr) auto;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(140px, 1fr) auto auto;
   gap: 10px;
   align-items: center;
   border: 1px solid rgba(243, 223, 178, 0.18);

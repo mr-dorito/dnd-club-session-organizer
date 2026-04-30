@@ -913,7 +913,7 @@ function renderProgressNotes() {
 
 function renderSpeakingCharts(session, activeCampaign) {
   const sessionStats = session?.speakerStats || [];
-  renderChart(elements.sessionSpeakingChart, sessionStats, "No speaking minutes saved for this session.");
+  renderChart(elements.sessionSpeakingChart, sessionStats, "No speaking minutes saved for this session.", "session");
 
   const campaignTotals = new Map();
   getCampaignSessions(state, activeCampaign?.id).forEach((entry) => {
@@ -924,10 +924,15 @@ function renderSpeakingCharts(session, activeCampaign) {
       campaignTotals.set(key, existing);
     });
   });
-  renderChart(elements.campaignSpeakingChart, Array.from(campaignTotals.values()), "No speaking minutes saved for this campaign.");
+  renderChart(
+    elements.campaignSpeakingChart,
+    Array.from(campaignTotals.values()),
+    "No speaking minutes saved for this campaign.",
+    "campaign",
+  );
 }
 
-function renderChart(container, stats, emptyText) {
+function renderChart(container, stats, emptyText, scope) {
   const visibleStats = stats.filter((stat) => Number(stat.minutes) > 0);
   if (!visibleStats.length) {
     container.innerHTML = `<div class="empty-state">${emptyText}</div>`;
@@ -945,6 +950,7 @@ function renderChart(container, stats, emptyText) {
           </div>
           <div class="chart-track"><span style="width: ${width}%"></span></div>
           <strong>${escapeHtml(stat.minutes)} min</strong>
+          <button class="icon-button delete-button" type="button" data-delete-speaking-stat="${scope}" data-speaker-id="${escapeHtml(stat.speakerId)}" data-speaker-type="${escapeHtml(stat.speakerType)}">Del</button>
         </div>
       `;
     })
@@ -2507,6 +2513,39 @@ elements.saveSpeakerStats.addEventListener("click", () => {
     };
   });
   render();
+});
+
+function deleteSpeakingStat(speakerId, speakerType, scope) {
+  if (!speakerId || !speakerType) return;
+  if (scope === "campaign") {
+    const activeCampaign = getActiveCampaign();
+    getCampaignSessions(state, activeCampaign?.id).forEach((session) => {
+      session.speakerStats = (session.speakerStats || []).filter(
+        (stat) => !(stat.speakerId === speakerId && stat.speakerType === speakerType),
+      );
+    });
+    render();
+    return;
+  }
+
+  const session = getCurrentSession();
+  if (!session) return;
+  session.speakerStats = (session.speakerStats || []).filter(
+    (stat) => !(stat.speakerId === speakerId && stat.speakerType === speakerType),
+  );
+  render();
+}
+
+elements.sessionSpeakingChart.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-delete-speaking-stat]");
+  if (!button) return;
+  deleteSpeakingStat(button.dataset.speakerId, button.dataset.speakerType, "session");
+});
+
+elements.campaignSpeakingChart.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-delete-speaking-stat]");
+  if (!button) return;
+  deleteSpeakingStat(button.dataset.speakerId, button.dataset.speakerType, "campaign");
 });
 
 elements.applySpeakerReview.addEventListener("click", () => {
