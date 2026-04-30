@@ -82,6 +82,8 @@ const elements = {
   dmEmpty: document.querySelector("#dm-empty"),
   dmList: document.querySelector("#dm-list"),
   combatRosterEmpty: document.querySelector("#combat-roster-empty"),
+  battleStripCampaign: document.querySelector("#battle-strip-campaign"),
+  battleStripSession: document.querySelector("#battle-strip-session"),
   combatMemberOptions: document.querySelector("#combat-member-options"),
   monsterForm: document.querySelector("#monster-form"),
   monsterType: document.querySelector("#monster-type"),
@@ -162,6 +164,9 @@ const elements = {
   speakerEmpty: document.querySelector("#speaker-empty"),
   speakerList: document.querySelector("#speaker-list"),
   saveSpeakerStats: document.querySelector("#save-speaker-stats"),
+  speakerStatsMessage: document.querySelector("#speaker-stats-message"),
+  speakingStripCampaign: document.querySelector("#speaking-strip-campaign"),
+  speakingStripSession: document.querySelector("#speaking-strip-session"),
   manualTranscriptField: document.querySelector("#manual-transcript-field"),
   saveManualTranscript: document.querySelector("#save-manual-transcript"),
   manualTranscriptMessage: document.querySelector("#manual-transcript-message"),
@@ -178,6 +183,8 @@ const elements = {
   segmentMinutes: document.querySelector("#segment-minutes"),
   segmentNote: document.querySelector("#segment-note"),
   progressSessionContext: document.querySelector("#progress-session-context"),
+  progressStripCampaign: document.querySelector("#progress-strip-campaign"),
+  progressStripSession: document.querySelector("#progress-strip-session"),
   progressForm: document.querySelector("#progress-form"),
   transcriptField: document.querySelector("#transcript-field"),
   recapSummaryField: document.querySelector("#recap-summary-field"),
@@ -426,6 +433,7 @@ function showView(viewName) {
 
 function render() {
   renderHome();
+  renderSessionStrips();
   renderRoster();
   renderDms();
   renderCombatBuilder();
@@ -435,6 +443,21 @@ function render() {
   renderSpeakingTime();
   renderProgressNotes();
   saveState();
+}
+
+function renderSessionStrips() {
+  const campaign = getActiveCampaign();
+  const session = getCurrentSession();
+  const sessionText = session ? getSessionLabel(session, getSessionIndex(session)) : "No session selected";
+  const campaignText = campaign?.name || "No active campaign";
+  [
+    [elements.battleStripCampaign, elements.battleStripSession],
+    [elements.speakingStripCampaign, elements.speakingStripSession],
+    [elements.progressStripCampaign, elements.progressStripSession],
+  ].forEach(([campaignElement, sessionElement]) => {
+    if (campaignElement) campaignElement.textContent = campaignText;
+    if (sessionElement) sessionElement.textContent = sessionText;
+  });
 }
 
 function renderHome() {
@@ -773,6 +796,7 @@ function renderSpeakingTime() {
   const activeCampaign = getActiveCampaign();
   const speakers = getSpeakers();
   const manualMode = Boolean(state.settings.manualMode);
+  const hasAudioFile = Boolean(elements.audioUploadFile.files?.[0]);
   elements.speakingSessionContext.textContent = session
     ? `Speaking time for ${getSessionLabel(session, getSessionIndex(session))} in ${activeCampaign?.name || "the active campaign"}.`
     : "Create or select a session to record audio and track speaking time.";
@@ -797,24 +821,34 @@ function renderSpeakingTime() {
   elements.transcribeAudio.disabled =
     !session ||
     manualMode ||
+    !hasAudioFile ||
     audioUploadStatus === "uploading" ||
     audioUploadStatus === "transcribing" ||
     speakerTimingStatus === "processing";
   elements.transcribeAudio.textContent =
-    manualMode
+    !session
+      ? "Select session first"
+      : manualMode
       ? "Manual Mode enabled"
+      : !hasAudioFile
+      ? "Choose file first"
       : audioUploadStatus === "uploading" || audioUploadStatus === "transcribing"
       ? "Transcribing..."
       : "Upload and transcribe";
   elements.processSpeakerTiming.disabled =
     !session ||
     manualMode ||
+    !hasAudioFile ||
     audioUploadStatus === "uploading" ||
     audioUploadStatus === "transcribing" ||
     speakerTimingStatus === "processing";
   elements.processSpeakerTiming.textContent =
-    manualMode
+    !session
+      ? "Select session first"
+      : manualMode
       ? "Manual Mode enabled"
+      : !hasAudioFile
+      ? "Choose file first"
       : speakerTimingStatus === "processing"
       ? "Processing speakers..."
       : "Process speaker timing";
@@ -1605,6 +1639,9 @@ function getAudioProcessingMessage(session) {
   if (state.settings.manualMode) {
     return "Manual Mode is on. Record and download audio, then paste transcripts manually until an AI backend is connected.";
   }
+  if (!elements.audioUploadFile.files?.[0]) {
+    return "Choose a downloaded audio file before transcription or AI speaker timing.";
+  }
   return `Upload a saved recording to ${API_BASE_URL} for transcription or AI speaker timing. Speaker labels are temporary until you review them.`;
 }
 
@@ -2342,6 +2379,10 @@ elements.saveManualTranscript.addEventListener("click", () => {
   render();
 });
 
+elements.audioUploadFile.addEventListener("change", () => {
+  renderSpeakingTime();
+});
+
 elements.transcribeAudio.addEventListener("click", async () => {
   const session = getCurrentSession();
   if (!session) return;
@@ -2512,6 +2553,7 @@ elements.saveSpeakerStats.addEventListener("click", () => {
       minutes: Math.max(0, Number(input.value || 0)),
     };
   });
+  elements.speakerStatsMessage.textContent = "Speaking time saved for this session.";
   render();
 });
 
@@ -2524,6 +2566,7 @@ function deleteSpeakingStat(speakerId, speakerType, scope) {
         (stat) => !(stat.speakerId === speakerId && stat.speakerType === speakerType),
       );
     });
+    elements.speakerStatsMessage.textContent = "Speaker removed from active campaign totals.";
     render();
     return;
   }
@@ -2533,6 +2576,7 @@ function deleteSpeakingStat(speakerId, speakerType, scope) {
   session.speakerStats = (session.speakerStats || []).filter(
     (stat) => !(stat.speakerId === speakerId && stat.speakerType === speakerType),
   );
+  elements.speakerStatsMessage.textContent = "Speaker removed from this session chart.";
   render();
 }
 
@@ -2592,6 +2636,9 @@ elements.applySpeakerReview.addEventListener("click", () => {
     minutes: Math.round(entry.minutes * 10) / 10,
   }));
   session.speakerReviewStatus = session.speakerStats.length ? "reviewed" : "needs-review";
+  elements.speakerStatsMessage.textContent = session.speakerStats.length
+    ? "Reviewed speaker timing applied to the charts."
+    : "Choose at least one player or DM before applying speaker timing.";
   elements.audioUploadMessage.textContent = session.speakerStats.length
     ? "Reviewed speaker timing was applied to the speaking charts."
     : "Choose at least one player or DM before applying speaker timing.";

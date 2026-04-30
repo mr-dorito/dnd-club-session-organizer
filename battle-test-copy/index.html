@@ -169,6 +169,18 @@
             <p>Build an encounter, enter turn-order rolls, resolve attacks, track health, and save battle results.</p>
           </div>
 
+          <div class="session-strip">
+            <div>
+              <span>Active campaign</span>
+              <strong id="battle-strip-campaign">No campaign</strong>
+            </div>
+            <div>
+              <span>Current session</span>
+              <strong id="battle-strip-session">No session selected</strong>
+            </div>
+            <button class="ghost-button" data-view="sessions" type="button">Open Sessions</button>
+          </div>
+
           <div class="initiative-layout">
             <div class="panel">
               <h3>1. Choose characters</h3>
@@ -305,6 +317,18 @@
             <p id="speaking-session-context">Select or create a session to record audio and enter manual speaking time.</p>
           </div>
 
+          <div class="session-strip">
+            <div>
+              <span>Active campaign</span>
+              <strong id="speaking-strip-campaign">No campaign</strong>
+            </div>
+            <div>
+              <span>Current session</span>
+              <strong id="speaking-strip-session">No session selected</strong>
+            </div>
+            <button class="ghost-button" data-view="sessions" type="button">Open Sessions</button>
+          </div>
+
           <div class="two-column">
             <div class="panel form-panel">
               <h3>Session recording</h3>
@@ -394,12 +418,13 @@
               </div>
               <div class="speaker-list" id="speaker-list"></div>
               <button class="primary-button" id="save-speaker-stats" type="button">Save speaking time</button>
+              <p class="form-note" id="speaker-stats-message"></p>
             </div>
 
             <div class="panel wide-panel speaking-charts-panel">
               <div class="panel-title-row">
                 <h3>Speaking charts</h3>
-                <span class="count-pill">Manual data</span>
+                <span class="count-pill">Reviewed / Manual totals</span>
               </div>
               <p class="form-note">Charts use reviewed AI speaker timing when available, or the manual minutes saved above.</p>
               <h4>Current session</h4>
@@ -448,6 +473,18 @@
               <h2 id="progress-title">Session Progress Notes</h2>
             </div>
             <p id="progress-session-context">Select or create a session to write manual transcripts, recaps, and campaign notes.</p>
+          </div>
+
+          <div class="session-strip">
+            <div>
+              <span>Active campaign</span>
+              <strong id="progress-strip-campaign">No campaign</strong>
+            </div>
+            <div>
+              <span>Current session</span>
+              <strong id="progress-strip-session">No session selected</strong>
+            </div>
+            <button class="ghost-button" data-view="sessions" type="button">Open Sessions</button>
           </div>
 
           <div class="progress-layout">

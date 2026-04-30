@@ -312,6 +312,35 @@ h3 {
   grid-column: span 2;
 }
 
+.session-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+  border: 1px solid rgba(216, 164, 65, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(15, 13, 10, 0.42);
+}
+
+.session-strip span,
+.session-strip strong {
+  display: block;
+}
+
+.session-strip span {
+  color: var(--muted);
+  font-family: Arial, sans-serif;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.session-strip strong {
+  color: var(--cream);
+  font-size: 1.05rem;
+}
+
 .form-panel,
 .monster-form {
   display: grid;
@@ -1170,6 +1199,7 @@ textarea {
 
   .monster-form,
   .combatant-row,
+  .session-strip,
   .speaker-map-row,
   .speaker-segment-form,
   .speaker-segment-card,
