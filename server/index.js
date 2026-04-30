@@ -239,6 +239,7 @@ app.post("/api/process-speaker-timing", upload.single("audio"), async (request, 
       file: audioFile,
       model: speakerTimingModel,
       response_format: "diarized_json",
+      chunking_strategy: "auto",
     });
     const speakerSegments = normalizeSpeakerSegments(transcriptResponse);
 
