@@ -11,6 +11,7 @@ const port = Number(process.env.PORT || 3001);
 const allowedOrigin = process.env.ALLOWED_ORIGIN || "*";
 const model = process.env.OPENAI_MODEL || "gpt-5.2";
 const transcriptionModel = process.env.TRANSCRIPTION_MODEL || "gpt-4o-transcribe";
+const speakerTimingModel = process.env.SPEAKER_TIMING_MODEL || "gpt-4o-transcribe-diarize";
 const maxAudioBytes = 25 * 1024 * 1024;
 const allowedAudioExtensions = new Set([".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm"]);
 const upload = multer({
@@ -66,6 +67,52 @@ async function deleteUploadedFile(file) {
       console.warn("Could not delete temporary audio upload:", error);
     }
   }
+}
+
+async function validateAudioUpload(file, response, emptyMessage) {
+  if (!file) {
+    response.status(400).json({ error: emptyMessage });
+    return false;
+  }
+
+  const extension = getAudioExtension(file.originalname);
+  if (!allowedAudioExtensions.has(extension)) {
+    await deleteUploadedFile(file);
+    response.status(400).json({
+      error: "Unsupported audio type. Use mp3, mp4, mpeg, mpga, m4a, wav, or webm.",
+    });
+    return false;
+  }
+
+  return true;
+}
+
+function normalizeSpeakerSegments(payload) {
+  const segments = Array.isArray(payload?.segments) ? payload.segments : [];
+  return segments
+    .map((segment, index) => {
+      const startSeconds = Math.max(0, Number(segment.start ?? segment.startSeconds ?? segment.start_seconds ?? 0) || 0);
+      const endSeconds = Math.max(
+        startSeconds,
+        Number(segment.end ?? segment.endSeconds ?? segment.end_seconds ?? startSeconds) || startSeconds,
+      );
+      const durationSeconds = Math.max(
+        0,
+        Number(segment.duration ?? segment.durationSeconds ?? segment.duration_seconds ?? endSeconds - startSeconds) || 0,
+      );
+      const speakerLabel = String(
+        segment.speaker ?? segment.speakerLabel ?? segment.speaker_label ?? `Speaker ${index + 1}`,
+      ).trim();
+      return {
+        id: `speaker-segment-${index + 1}`,
+        speakerLabel: speakerLabel || `Speaker ${index + 1}`,
+        text: String(segment.text || "").trim(),
+        startSeconds,
+        endSeconds,
+        durationSeconds,
+      };
+    })
+    .filter((segment) => segment.text || segment.durationSeconds > 0);
 }
 
 app.get("/api/health", (_request, response) => {
@@ -139,17 +186,7 @@ app.post("/api/generate-recap", async (request, response) => {
 
 app.post("/api/transcribe-session-audio", upload.single("audio"), async (request, response) => {
   const file = request.file;
-  if (!file) {
-    response.status(400).json({ error: "Choose an audio file before starting transcription." });
-    return;
-  }
-
-  const extension = getAudioExtension(file.originalname);
-  if (!allowedAudioExtensions.has(extension)) {
-    await deleteUploadedFile(file);
-    response.status(400).json({
-      error: "Unsupported audio type. Use mp3, mp4, mpeg, mpga, m4a, wav, or webm.",
-    });
+  if (!(await validateAudioUpload(file, response, "Choose an audio file before starting transcription."))) {
     return;
   }
 
@@ -177,6 +214,44 @@ app.post("/api/transcribe-session-audio", upload.single("audio"), async (request
     console.error("Audio transcription failed:", error);
     response.status(500).json({
       error: "Audio transcription failed. Try a smaller file or keep the transcript manual for now.",
+    });
+  } finally {
+    await deleteUploadedFile(file);
+  }
+});
+
+app.post("/api/process-speaker-timing", upload.single("audio"), async (request, response) => {
+  const file = request.file;
+  if (!(await validateAudioUpload(file, response, "Choose an audio file before processing speaker timing."))) {
+    return;
+  }
+
+  const client = getOpenAIClient();
+  if (!client) {
+    await deleteUploadedFile(file);
+    response.status(500).json({ error: "OPENAI_API_KEY is not configured on the backend." });
+    return;
+  }
+
+  try {
+    const audioFile = await toFile(await fs.readFile(file.path), file.originalname, { type: file.mimetype });
+    const transcriptResponse = await client.audio.transcriptions.create({
+      file: audioFile,
+      model: speakerTimingModel,
+      response_format: "diarized_json",
+    });
+    const speakerSegments = normalizeSpeakerSegments(transcriptResponse);
+
+    response.json({
+      transcript: String(transcriptResponse.text || "").trim(),
+      speakerSegments,
+      durationSeconds: Number(transcriptResponse.duration || 0) || null,
+      fileName: file.originalname,
+    });
+  } catch (error) {
+    console.error("Speaker timing failed:", error);
+    response.status(500).json({
+      error: "Speaker timing failed. Try normal transcription or keep speaking time manual for now.",
     });
   } finally {
     await deleteUploadedFile(file);

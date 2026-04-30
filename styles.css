@@ -337,7 +337,8 @@ button:disabled {
   opacity: 0.55;
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 42px;
   border: 1px solid rgba(216, 164, 65, 0.38);
@@ -609,6 +610,31 @@ textarea {
   grid-template-columns: minmax(0, 1fr) 110px minmax(0, 1.2fr) auto;
   gap: 12px;
   align-items: end;
+}
+
+.speaker-map-list {
+  display: grid;
+  gap: 10px;
+}
+
+.speaker-map-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.8fr);
+  gap: 12px;
+  align-items: center;
+  border: 1px solid rgba(243, 223, 178, 0.18);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(15, 13, 10, 0.35);
+}
+
+.speaker-map-row strong,
+.speaker-map-row small {
+  display: block;
+}
+
+.speaker-map-row small {
+  color: var(--muted);
 }
 
 .speaker-segment-card {
@@ -1135,6 +1161,7 @@ textarea {
 
   .monster-form,
   .combatant-row,
+  .speaker-map-row,
   .speaker-segment-form,
   .speaker-segment-card,
   .chart-row {

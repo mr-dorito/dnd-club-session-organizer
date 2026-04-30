@@ -12,5 +12,7 @@ services:
         value: gpt-5.2
       - key: TRANSCRIPTION_MODEL
         value: gpt-4o-transcribe
+      - key: SPEAKER_TIMING_MODEL
+        value: gpt-4o-transcribe-diarize
       - key: ALLOWED_ORIGIN
         value: "*"

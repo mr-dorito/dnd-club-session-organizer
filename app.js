@@ -49,6 +49,7 @@ let recordingStartedAt = null;
 let recordingTimerId = null;
 let recordingDownloadUrl = null;
 let audioUploadStatus = "ready";
+let speakerTimingStatus = "ready";
 let highlightedBattleId = null;
 
 const elements = {
@@ -155,6 +156,7 @@ const elements = {
   speakerReviewStatus: document.querySelector("#speaker-review-status"),
   audioUploadFile: document.querySelector("#audio-upload-file"),
   transcribeAudio: document.querySelector("#transcribe-audio"),
+  processSpeakerTiming: document.querySelector("#process-speaker-timing"),
   audioUploadMessage: document.querySelector("#audio-upload-message"),
   speakerCount: document.querySelector("#speaker-count"),
   speakerEmpty: document.querySelector("#speaker-empty"),
@@ -169,6 +171,8 @@ const elements = {
   speakerSegmentCount: document.querySelector("#speaker-segment-count"),
   speakerSegmentsEmpty: document.querySelector("#speaker-segments-empty"),
   speakerSegmentList: document.querySelector("#speaker-segment-list"),
+  speakerMapList: document.querySelector("#speaker-map-list"),
+  applySpeakerReview: document.querySelector("#apply-speaker-review"),
   speakerSegmentForm: document.querySelector("#speaker-segment-form"),
   segmentSpeakerLabel: document.querySelector("#segment-speaker-label"),
   segmentMinutes: document.querySelector("#segment-minutes"),
@@ -785,15 +789,35 @@ function renderSpeakingTime() {
   elements.stopRecording.disabled = !mediaRecorder;
   elements.recordingNextSteps.classList.toggle("hidden", recording?.status !== "ready to download");
   elements.audioUploadFile.disabled =
-    !session || manualMode || audioUploadStatus === "uploading" || audioUploadStatus === "transcribing";
+    !session ||
+    manualMode ||
+    audioUploadStatus === "uploading" ||
+    audioUploadStatus === "transcribing" ||
+    speakerTimingStatus === "processing";
   elements.transcribeAudio.disabled =
-    !session || manualMode || audioUploadStatus === "uploading" || audioUploadStatus === "transcribing";
+    !session ||
+    manualMode ||
+    audioUploadStatus === "uploading" ||
+    audioUploadStatus === "transcribing" ||
+    speakerTimingStatus === "processing";
   elements.transcribeAudio.textContent =
     manualMode
       ? "Manual Mode enabled"
       : audioUploadStatus === "uploading" || audioUploadStatus === "transcribing"
       ? "Transcribing..."
       : "Upload and transcribe";
+  elements.processSpeakerTiming.disabled =
+    !session ||
+    manualMode ||
+    audioUploadStatus === "uploading" ||
+    audioUploadStatus === "transcribing" ||
+    speakerTimingStatus === "processing";
+  elements.processSpeakerTiming.textContent =
+    manualMode
+      ? "Manual Mode enabled"
+      : speakerTimingStatus === "processing"
+      ? "Processing speakers..."
+      : "Process speaker timing";
   elements.manualTranscriptField.disabled = !session;
   elements.manualTranscriptField.value = session?.transcript || "";
   elements.saveManualTranscript.disabled = !session;
@@ -929,21 +953,51 @@ function renderChart(container, stats, emptyText) {
 
 function renderSpeakerSegments(session) {
   const segments = session?.speakerSegments || [];
+  const speakers = getSpeakers();
   elements.speakerSegmentForm.querySelector("button").disabled = !session;
+  elements.applySpeakerReview.disabled = !session || !segments.length;
   [elements.segmentSpeakerLabel, elements.segmentMinutes, elements.segmentNote].forEach((field) => {
     field.disabled = !session;
   });
   elements.speakerSegmentCount.textContent = `${segments.length} segment${segments.length === 1 ? "" : "s"}`;
   elements.speakerSegmentsEmpty.classList.toggle("hidden", segments.length > 0);
+  const aiLabels = Array.from(new Set(segments.filter((segment) => segment.source === "ai").map((segment) => segment.speakerLabel)));
+  elements.speakerMapList.innerHTML = aiLabels.length
+    ? aiLabels
+        .map((label) => {
+          const assignedSegment = segments.find((segment) => segment.speakerLabel === label && segment.assignedSpeakerId);
+          const currentValue = assignedSegment
+            ? `${assignedSegment.assignedSpeakerType}:${assignedSegment.assignedSpeakerId}`
+            : "";
+          return `
+            <label class="speaker-map-row">
+              <span>
+                <strong>${escapeHtml(label || "Unknown speaker")}</strong>
+                <small>${segments.filter((segment) => segment.speakerLabel === label).length} segment${segments.filter((segment) => segment.speakerLabel === label).length === 1 ? "" : "s"}</small>
+              </span>
+              <select data-speaker-map-label="${escapeHtml(label || "Unknown speaker")}">
+                <option value="">Choose player or DM</option>
+                ${speakers
+                  .map(
+                    (speaker) =>
+                      `<option value="${speaker.type}:${speaker.id}" ${currentValue === `${speaker.type}:${speaker.id}` ? "selected" : ""}>${escapeHtml(speaker.name)} (${speaker.type === "dm" ? "DM" : "Player"})</option>`,
+                  )
+                  .join("")}
+              </select>
+            </label>
+          `;
+        })
+        .join("")
+    : "";
   elements.speakerSegmentList.innerHTML = segments
     .map(
       (segment) => `
         <article class="speaker-segment-card">
           <div>
-            <strong>${escapeHtml(segment.speakerLabel || "Unknown speaker")}</strong>
-            <small>${escapeHtml(segment.minutes || 0)} min</small>
+            <strong>${escapeHtml(segment.assignedSpeakerName || segment.speakerLabel || "Unknown speaker")}</strong>
+            <small>${escapeHtml(segment.source === "ai" ? `${segment.speakerLabel || "AI speaker"} · ${formatMinutes(segment.minutes || 0)} min` : `${formatMinutes(segment.minutes || 0)} min`)}</small>
           </div>
-          <p>${escapeHtml(segment.note || "Manual review segment")}</p>
+          <p>${escapeHtml(segment.note || segment.text || "Manual review segment")}</p>
           <button class="icon-button delete-button" type="button" data-delete-segment="${segment.id}">Del</button>
         </article>
       `,
@@ -1456,6 +1510,60 @@ function getSpeakers() {
   return [...players, ...dms];
 }
 
+function formatMinutes(minutes) {
+  const value = Math.max(0, Number(minutes || 0));
+  return Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10);
+}
+
+function getUploadedAudioFile() {
+  const file = elements.audioUploadFile.files?.[0];
+  if (!file) {
+    elements.audioUploadMessage.textContent = "Choose a downloaded recording file first.";
+    return null;
+  }
+
+  const fileName = file.name || "session-audio";
+  const extension = `.${fileName.split(".").pop().toLowerCase()}`;
+  if (!SUPPORTED_AUDIO_EXTENSIONS.includes(extension)) {
+    elements.audioUploadMessage.textContent = "Use mp3, mp4, mpeg, mpga, m4a, wav, or webm audio.";
+    audioUploadStatus = "error";
+    render();
+    return null;
+  }
+
+  if (file.size > MAX_AUDIO_UPLOAD_BYTES) {
+    elements.audioUploadMessage.textContent = "Audio files must be 25 MB or smaller for this audio processing step.";
+    audioUploadStatus = "error";
+    render();
+    return null;
+  }
+
+  return file;
+}
+
+function normalizeSpeakerTimingSegment(segment, index) {
+  const startSeconds = Math.max(0, Number(segment.startSeconds ?? segment.start ?? 0) || 0);
+  const endSeconds = Math.max(startSeconds, Number(segment.endSeconds ?? segment.end ?? startSeconds) || startSeconds);
+  const durationSeconds = Math.max(
+    0,
+    Number(segment.durationSeconds ?? segment.duration ?? endSeconds - startSeconds) || 0,
+  );
+  return {
+    id: segment.id || createId("segment"),
+    speakerLabel: String(segment.speakerLabel || segment.speaker || `Speaker ${index + 1}`).trim(),
+    assignedSpeakerId: segment.assignedSpeakerId || "",
+    assignedSpeakerType: segment.assignedSpeakerType || "",
+    assignedSpeakerName: segment.assignedSpeakerName || "",
+    minutes: Math.round((durationSeconds / 60) * 10) / 10,
+    durationSeconds,
+    startSeconds,
+    endSeconds,
+    note: String(segment.text || segment.note || "").trim(),
+    source: "ai",
+    createdAt: segment.createdAt || new Date().toISOString(),
+  };
+}
+
 function formatDuration(totalSeconds) {
   const seconds = Math.max(0, Math.round(totalSeconds || 0));
   const minutes = Math.floor(seconds / 60);
@@ -1473,10 +1581,13 @@ function formatStatus(status) {
 function getAudioProcessingStatus(session) {
   if (!session) return "Not uploaded";
   if (state.settings.manualMode) return "Manual Mode";
+  if (speakerTimingStatus === "processing") return "Processing speakers";
   if (audioUploadStatus === "uploading") return "Uploading";
   if (audioUploadStatus === "transcribing") return "Transcribing";
-  if (audioUploadStatus === "error") return "Error";
+  if (audioUploadStatus === "error" || speakerTimingStatus === "error") return "Error";
+  if (session.speakerSegments?.some((segment) => segment.source === "ai")) return "Needs review";
   if (session.recording?.status === "transcribed") return "Complete";
+  if (session.recording?.status === "speaker timing ready") return "Needs review";
   if (session.recording?.status === "saved") return "Ready for backend";
   if (session.recording?.status === "ready to download") return "Ready";
   if (session.recording?.status === "recording") return "Recording";
@@ -1488,7 +1599,7 @@ function getAudioProcessingMessage(session) {
   if (state.settings.manualMode) {
     return "Manual Mode is on. Record and download audio, then paste transcripts manually until an AI backend is connected.";
   }
-  return `Upload a saved recording to ${API_BASE_URL} for transcription. Speaker labels still stay manual.`;
+  return `Upload a saved recording to ${API_BASE_URL} for transcription or AI speaker timing. Speaker labels are temporary until you review them.`;
 }
 
 function updateManualModeButton(button) {
@@ -2189,6 +2300,7 @@ function setManualMode(enabled) {
   state.settings.manualMode = Boolean(enabled);
   if (state.settings.manualMode) {
     audioUploadStatus = "ready";
+    speakerTimingStatus = "ready";
   }
   render();
 }
@@ -2227,6 +2339,7 @@ elements.saveManualTranscript.addEventListener("click", () => {
 elements.transcribeAudio.addEventListener("click", async () => {
   const session = getCurrentSession();
   if (!session) return;
+  speakerTimingStatus = "ready";
   if (state.settings.manualMode) {
     elements.audioUploadMessage.textContent = "Manual Mode is on. Paste a transcript manually or turn Manual Mode off to use AI processing.";
     return;
@@ -2261,6 +2374,7 @@ elements.transcribeAudio.addEventListener("click", async () => {
   formData.append("campaignName", activeCampaign?.name || "Active campaign");
   formData.append("sessionLabel", sessionLabel);
 
+  speakerTimingStatus = "ready";
   audioUploadStatus = "uploading";
   elements.audioUploadMessage.textContent = "Uploading audio for transcription.";
   render();
@@ -2293,6 +2407,7 @@ elements.transcribeAudio.addEventListener("click", async () => {
       fileName: payload.fileName || fileName,
     };
     audioUploadStatus = "complete";
+    speakerTimingStatus = "ready";
     elements.audioUploadFile.value = "";
     elements.audioUploadMessage.textContent = "Transcript added to Session Notes. Review it, then save notes.";
     render();
@@ -2302,6 +2417,75 @@ elements.transcribeAudio.addEventListener("click", async () => {
       error.message === "Failed to fetch"
         ? `Could not reach the AI backend at ${API_BASE_URL}.`
         : error.message || "Audio transcription failed.";
+    renderSpeakingTime();
+    saveState();
+  }
+});
+
+elements.processSpeakerTiming.addEventListener("click", async () => {
+  const session = getCurrentSession();
+  if (!session) return;
+  audioUploadStatus = "ready";
+  if (state.settings.manualMode) {
+    elements.audioUploadMessage.textContent = "Manual Mode is on. Turn it off to use AI speaker timing.";
+    return;
+  }
+
+  const file = getUploadedAudioFile();
+  if (!file) return;
+
+  const activeCampaign = getActiveCampaign();
+  const sessionLabel = getSessionLabel(session, getSessionIndex(session));
+  const formData = new FormData();
+  formData.append("audio", file);
+  formData.append("campaignName", activeCampaign?.name || "Active campaign");
+  formData.append("sessionLabel", sessionLabel);
+
+  audioUploadStatus = "ready";
+  speakerTimingStatus = "processing";
+  elements.audioUploadMessage.textContent = "Processing speaker timing. This can take a little while.";
+  renderSpeakingTime();
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/process-speaker-timing`, {
+      method: "POST",
+      body: formData,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || "Speaker timing failed.");
+    }
+
+    const transcript = String(payload.transcript || "").trim();
+    const segments = Array.isArray(payload.speakerSegments)
+      ? payload.speakerSegments.map(normalizeSpeakerTimingSegment)
+      : [];
+
+    if (transcript) {
+      session.transcript = transcript;
+      session.aiStatus = "ready";
+    }
+    session.speakerSegments = segments;
+    session.speakerReviewStatus = segments.length ? "needs-review" : "manual";
+    session.recording = {
+      ...(normalizeRecording(session.recording) || {}),
+      status: segments.length ? "speaker timing ready" : "transcribed",
+      durationSeconds: Number(payload.durationSeconds || session.recording?.durationSeconds || 0),
+      fileName: payload.fileName || file.name || "session-audio",
+    };
+    audioUploadStatus = "complete";
+    speakerTimingStatus = "complete";
+    elements.audioUploadFile.value = "";
+    elements.audioUploadMessage.textContent = segments.length
+      ? "Speaker segments are ready. Match each AI speaker label to a player or DM, then apply the reviewed timing."
+      : "Transcript came back, but no speaker segments were found. Manual speaking time is still available.";
+    render();
+  } catch (error) {
+    speakerTimingStatus = "error";
+    elements.audioUploadMessage.textContent =
+      error.message === "Failed to fetch"
+        ? `Could not reach the AI backend at ${API_BASE_URL}.`
+        : error.message || "Speaker timing failed.";
     renderSpeakingTime();
     saveState();
   }
@@ -2322,6 +2506,56 @@ elements.saveSpeakerStats.addEventListener("click", () => {
       minutes: Math.max(0, Number(input.value || 0)),
     };
   });
+  render();
+});
+
+elements.applySpeakerReview.addEventListener("click", () => {
+  const session = getCurrentSession();
+  if (!session) return;
+
+  const mappings = new Map();
+  elements.speakerMapList.querySelectorAll("[data-speaker-map-label]").forEach((select) => {
+    mappings.set(select.dataset.speakerMapLabel, select.value);
+  });
+
+  const speakers = getSpeakers();
+  const totals = new Map();
+  session.speakerSegments = (session.speakerSegments || []).map((segment) => {
+    if (segment.source !== "ai") return segment;
+    const mappingValue = mappings.get(segment.speakerLabel || "Unknown speaker");
+    if (!mappingValue) return { ...segment, assignedSpeakerId: "", assignedSpeakerType: "", assignedSpeakerName: "" };
+
+    const [speakerType, speakerId] = mappingValue.split(":");
+    const speaker = speakers.find((entry) => entry.type === speakerType && entry.id === speakerId);
+    if (!speaker) return segment;
+
+    const minutes = Math.max(0, Number(segment.minutes || 0));
+    const key = `${speaker.type}:${speaker.id}`;
+    const current = totals.get(key) || {
+      speakerId: speaker.id,
+      speakerType: speaker.type,
+      name: speaker.name,
+      minutes: 0,
+    };
+    current.minutes += minutes;
+    totals.set(key, current);
+
+    return {
+      ...segment,
+      assignedSpeakerId: speaker.id,
+      assignedSpeakerType: speaker.type,
+      assignedSpeakerName: speaker.name,
+    };
+  });
+
+  session.speakerStats = Array.from(totals.values()).map((entry) => ({
+    ...entry,
+    minutes: Math.round(entry.minutes * 10) / 10,
+  }));
+  session.speakerReviewStatus = session.speakerStats.length ? "reviewed" : "needs-review";
+  elements.audioUploadMessage.textContent = session.speakerStats.length
+    ? "Reviewed speaker timing was applied to the speaking charts."
+    : "Choose at least one player or DM before applying speaker timing.";
   render();
 });
 

@@ -117,11 +117,6 @@
                 Current Health
                 <input id="current-health" type="number" min="0" autocomplete="off" required />
               </label>
-              <div class="voice-placeholder">
-                <span>Demo voice</span>
-                <strong>Phase 2</strong>
-              </div>
-              <button class="ghost-button" type="button" disabled>Record demo voice later</button>
               <div class="button-row">
                 <button class="primary-button" type="submit">Save member</button>
                 <button class="secondary-button hidden" id="cancel-edit" type="button">Cancel edit</button>
@@ -135,11 +130,6 @@
                 DM name
                 <input id="dm-name" autocomplete="off" required />
               </label>
-              <div class="voice-placeholder">
-                <span>Demo voice</span>
-                <strong>Phase 2</strong>
-              </div>
-              <button class="ghost-button" type="button" disabled>Record demo voice later</button>
               <div class="button-row">
                 <button class="primary-button" type="submit">Save DM</button>
                 <button class="secondary-button hidden" id="cancel-dm-edit" type="button">Cancel edit</button>
@@ -369,7 +359,7 @@
               </label>
               <div class="button-row">
                 <button class="secondary-button" id="transcribe-audio" type="button">Upload and transcribe</button>
-                <button class="ghost-button" type="button" disabled>Process speakers - Backend needed</button>
+                <button class="ghost-button" id="process-speaker-timing" type="button">Process speaker timing</button>
               </div>
               <p class="form-note" id="audio-upload-message"></p>
             </div>
@@ -397,7 +387,7 @@
                 <span class="count-pill" id="speaker-count">0 speakers</span>
               </div>
               <p class="form-note">
-                Manual minutes are temporary until AI speaker recognition is added. Graphs are not available yet, but saved minutes will be used for future charts.
+                Manual minutes stay available as a fallback. AI speaker timing can fill these totals after you review the temporary speaker labels.
               </p>
               <div class="empty-state" id="speaker-empty">
                 Add player characters or Dungeon Masters to enter speaking time.
@@ -411,7 +401,7 @@
                 <h3>Speaking charts</h3>
                 <span class="count-pill">Manual data</span>
               </div>
-              <p class="form-note">Charts use the minutes saved above until AI speaker timing is connected.</p>
+              <p class="form-note">Charts use reviewed AI speaker timing when available, or the manual minutes saved above.</p>
               <h4>Current session</h4>
               <div class="chart-list" id="session-speaking-chart"></div>
               <h4>Active campaign totals</h4>
@@ -424,8 +414,10 @@
                 <span id="speaker-segment-count" class="count-pill">0 segments</span>
               </div>
               <p class="form-note">
-                Future AI transcript segments will appear here for speaker correction. For now, you can add manual review notes.
+                AI speaker timing creates temporary labels like Speaker 1. Match those labels to players or DMs, then apply the reviewed timing to the charts.
               </p>
+              <div class="speaker-map-list" id="speaker-map-list"></div>
+              <button class="secondary-button" id="apply-speaker-review" type="button">Apply reviewed timing</button>
               <form class="speaker-segment-form" id="speaker-segment-form">
                 <label>
                   Speaker label
