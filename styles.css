@@ -569,15 +569,24 @@ textarea {
   gap: 10px;
 }
 
+.speaking-charts-panel .chart-list {
+  margin-bottom: 18px;
+}
+
 .chart-row {
   display: grid;
-  grid-template-columns: minmax(120px, 0.8fr) minmax(140px, 1fr) auto auto;
-  gap: 10px;
+  grid-template-columns: minmax(180px, 0.75fr) minmax(220px, 1fr) minmax(70px, auto) auto;
+  gap: 14px;
   align-items: center;
   border: 1px solid rgba(243, 223, 178, 0.18);
   border-radius: 8px;
-  padding: 10px;
+  padding: 12px;
   background: rgba(15, 13, 10, 0.35);
+}
+
+.chart-row > strong {
+  text-align: right;
+  color: var(--cream);
 }
 
 .chart-label strong,
@@ -1166,6 +1175,10 @@ textarea {
   .speaker-segment-card,
   .chart-row {
     grid-template-columns: 1fr;
+  }
+
+  .chart-row > strong {
+    text-align: left;
   }
 
   .hero {
