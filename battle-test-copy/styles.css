@@ -374,6 +374,95 @@ h3 {
   min-height: 108px;
 }
 
+.prep-layout {
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.prep-section-list,
+.prep-card-list,
+.prep-mini-list {
+  display: grid;
+  gap: 12px;
+}
+
+.prep-section {
+  display: grid;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.prep-section + .prep-section {
+  margin-top: 18px;
+}
+
+.prep-section h4 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.prep-card,
+.prep-mini-card {
+  border: 1px solid rgba(243, 223, 178, 0.18);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(15, 13, 10, 0.35);
+}
+
+.prep-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+}
+
+.prep-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.prep-card small,
+.prep-card p,
+.prep-mini-card span,
+.prep-mini-card small {
+  color: var(--muted);
+}
+
+.prep-card p {
+  margin: 10px 0 0;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.prep-mini-card {
+  display: grid;
+  gap: 4px;
+}
+
+.prep-mini-card span {
+  font-family: Arial, sans-serif;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.prep-mini-card small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.35;
+}
+
+.muted-card {
+  opacity: 0.68;
+}
+
 .form-panel,
 .monster-form {
   display: grid;
@@ -1235,6 +1324,7 @@ textarea {
   .initiative-layout,
   .feature-grid,
   .progress-layout,
+  .prep-layout,
   .control-grid {
     grid-template-columns: 1fr;
   }
@@ -1262,6 +1352,7 @@ textarea {
   .speaker-map-row,
   .speaker-segment-form,
   .speaker-segment-card,
+  .prep-card,
   .chart-row {
     grid-template-columns: 1fr;
   }

@@ -19,6 +19,7 @@
         <nav class="nav-tabs" aria-label="Main sections">
           <button class="nav-tab active" data-view="home" type="button">Home</button>
           <button class="nav-tab" data-view="control" type="button">Control Panel</button>
+          <button class="nav-tab" data-view="prep" type="button">Session Prep</button>
           <button class="nav-tab" data-view="roster" type="button">Roster</button>
           <button class="nav-tab" data-view="initiative" type="button">Battle</button>
           <button class="nav-tab" data-view="sessions" type="button">Sessions</button>
@@ -62,6 +63,11 @@
               <span class="card-kicker">Live DM view</span>
               <strong>Control Panel</strong>
               <span>See the current session, battle, recording, AI, and quick notes in one place.</span>
+            </button>
+            <button class="feature-card ready" data-view="prep" type="button">
+              <span class="card-kicker">DM prep</span>
+              <strong>Session Prep</strong>
+              <span>Plan NPCs, locations, quests, scenes, clues, and goals before the meeting.</span>
             </button>
             <button class="feature-card ready" data-view="roster" type="button">
               <span class="card-kicker">Feature 1</span>
@@ -159,6 +165,16 @@
 
             <div class="panel control-card control-card-wide">
               <div class="panel-title-row">
+                <h3>Planned prep</h3>
+                <span class="count-pill" id="control-prep-count">0 planned</span>
+              </div>
+              <p class="form-note" id="control-prep-detail">Mark prep items for the current session to see them here.</p>
+              <div class="prep-mini-list" id="control-prep-list"></div>
+              <button class="secondary-button" data-view="prep" type="button">Open Session Prep</button>
+            </div>
+
+            <div class="panel control-card control-card-wide">
+              <div class="panel-title-row">
                 <h3>Quick session note</h3>
                 <span class="count-pill">Important Events</span>
               </div>
@@ -181,6 +197,72 @@
               </div>
               <p class="form-note" id="control-backup-detail">Backups move campaigns, sessions, notes, battles, and speaking stats between devices. Audio files stay separate.</p>
               <button class="secondary-button" data-view="sessions" type="button">Open Backup & Transfer</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-prep" aria-labelledby="prep-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">DM planning</p>
+              <h2 id="prep-title">Session Prep</h2>
+            </div>
+            <p id="prep-context">Create or select a campaign before planning session prep.</p>
+          </div>
+
+          <div class="prep-layout">
+            <form class="panel form-panel" id="prep-form">
+              <h3 id="prep-form-title">Add prep item</h3>
+              <input type="hidden" id="prep-id" />
+              <label>
+                Type
+                <select id="prep-type">
+                  <option value="npc">NPC</option>
+                  <option value="location">Location</option>
+                  <option value="quest">Quest</option>
+                  <option value="scene">Planned scene</option>
+                  <option value="clue">Secret / clue</option>
+                  <option value="goal">Session goal</option>
+                </select>
+              </label>
+              <label>
+                Name / title
+                <input id="prep-title-field" autocomplete="off" required />
+              </label>
+              <label>
+                Notes
+                <textarea id="prep-notes-field" rows="6" placeholder="What should the DM remember?"></textarea>
+              </label>
+              <label>
+                Status
+                <select id="prep-status">
+                  <option value="active">Active</option>
+                  <option value="used">Used</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </label>
+              <label class="check-row">
+                <input id="prep-planned-session" type="checkbox" />
+                <span>
+                  <strong>Planned for current session</strong>
+                  <span class="combatant-meta" id="prep-planned-note">Select a session to use this.</span>
+                </span>
+              </label>
+              <div class="button-row">
+                <button class="primary-button" id="save-prep" type="submit">Save prep item</button>
+                <button class="secondary-button hidden" id="cancel-prep-edit" type="button">Cancel edit</button>
+              </div>
+              <p class="form-note" id="prep-message"></p>
+            </form>
+
+            <div class="panel">
+              <div class="panel-title-row">
+                <h3>Campaign prep</h3>
+                <span class="count-pill" id="prep-count">0 saved</span>
+              </div>
+              <p class="form-note">Prep stays separate from Session Notes. Mark items as planned when they should appear on the Control Panel.</p>
+              <div class="empty-state" id="prep-empty">No prep items yet.</div>
+              <div class="prep-section-list" id="prep-list"></div>
             </div>
           </div>
         </section>

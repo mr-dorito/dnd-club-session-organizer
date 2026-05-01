@@ -7,12 +7,21 @@ let API_BASE_URL =
     : "https://dnd-club-session-organizer.onrender.com");
 const MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024;
 const SUPPORTED_AUDIO_EXTENSIONS = [".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm"];
+const PREP_TYPES = [
+  ["npc", "NPCs"],
+  ["location", "Locations"],
+  ["quest", "Quests"],
+  ["scene", "Planned scenes"],
+  ["clue", "Secrets / clues"],
+  ["goal", "Session goals"],
+];
 
 const initialState = {
   members: [],
   dms: [],
   campaigns: [],
   sessions: [],
+  prepItems: [],
   currentCampaignId: null,
   currentSessionId: null,
   settings: {
@@ -77,6 +86,25 @@ const elements = {
   controlNoteMessage: document.querySelector("#control-note-message"),
   controlBackupStatus: document.querySelector("#control-backup-status"),
   controlBackupDetail: document.querySelector("#control-backup-detail"),
+  controlPrepCount: document.querySelector("#control-prep-count"),
+  controlPrepDetail: document.querySelector("#control-prep-detail"),
+  controlPrepList: document.querySelector("#control-prep-list"),
+  prepContext: document.querySelector("#prep-context"),
+  prepForm: document.querySelector("#prep-form"),
+  prepFormTitle: document.querySelector("#prep-form-title"),
+  prepId: document.querySelector("#prep-id"),
+  prepType: document.querySelector("#prep-type"),
+  prepTitleField: document.querySelector("#prep-title-field"),
+  prepNotesField: document.querySelector("#prep-notes-field"),
+  prepStatus: document.querySelector("#prep-status"),
+  prepPlannedSession: document.querySelector("#prep-planned-session"),
+  prepPlannedNote: document.querySelector("#prep-planned-note"),
+  savePrep: document.querySelector("#save-prep"),
+  cancelPrepEdit: document.querySelector("#cancel-prep-edit"),
+  prepMessage: document.querySelector("#prep-message"),
+  prepCount: document.querySelector("#prep-count"),
+  prepEmpty: document.querySelector("#prep-empty"),
+  prepList: document.querySelector("#prep-list"),
   memberForm: document.querySelector("#member-form"),
   memberFormTitle: document.querySelector("#member-form-title"),
   memberId: document.querySelector("#member-id"),
@@ -277,6 +305,7 @@ function migrateCampaigns(nextState) {
     : [];
   nextState.sessions = Array.isArray(nextState.sessions) ? nextState.sessions : [];
   nextState.campaigns = Array.isArray(nextState.campaigns) ? nextState.campaigns : [];
+  nextState.prepItems = Array.isArray(nextState.prepItems) ? nextState.prepItems.map(normalizePrepItem) : [];
 
   nextState.sessions = nextState.sessions.map((session, index) => ({
     id: session.id || createId("session"),
@@ -330,6 +359,30 @@ function migrateCampaigns(nextState) {
   if (!currentSession || currentSession.campaignId !== nextState.currentCampaignId) {
     nextState.currentSessionId = getCampaignSessions(nextState, nextState.currentCampaignId)[0]?.id || null;
   }
+
+  const campaignIds = new Set(nextState.campaigns.map((campaign) => campaign.id));
+  const sessionIds = new Set(nextState.sessions.map((session) => session.id));
+  nextState.prepItems = nextState.prepItems
+    .filter((item) => campaignIds.has(item.campaignId))
+    .map((item) => ({
+      ...item,
+      plannedSessionId: sessionIds.has(item.plannedSessionId) ? item.plannedSessionId : "",
+    }));
+}
+
+function normalizePrepItem(item) {
+  const type = PREP_TYPES.some(([value]) => value === item.type) ? item.type : "npc";
+  const status = ["active", "used", "archived"].includes(item.status) ? item.status : "active";
+  return {
+    id: item.id || createId("prep"),
+    campaignId: item.campaignId || null,
+    type,
+    title: item.title || item.name || "Untitled prep",
+    notes: item.notes || "",
+    status,
+    plannedSessionId: item.plannedSessionId || "",
+    createdAt: item.createdAt || Date.now(),
+  };
 }
 
 function normalizeCombat(combat) {
@@ -455,6 +508,7 @@ function render() {
   renderHome();
   renderControlPanel();
   renderSessionStrips();
+  renderSessionPrep();
   renderRoster();
   renderDms();
   renderCombatBuilder();
@@ -555,6 +609,88 @@ function renderControlPanel() {
 
   elements.controlBackupStatus.textContent = `${state.campaigns.length} campaigns`;
   elements.controlBackupDetail.textContent = `${state.sessions.length} sessions, ${state.members.length} characters, and ${state.dms.length} DMs are saved in this browser. Audio files stay separate.`;
+
+  const plannedPrep = getCurrentSessionPrep();
+  elements.controlPrepCount.textContent = `${plannedPrep.length} planned`;
+  elements.controlPrepDetail.textContent = session
+    ? plannedPrep.length
+      ? "Prep planned for this session is ready at the table."
+      : "Mark prep items for the current session to see them here."
+    : "Select a session before planning session-specific prep.";
+  elements.controlPrepList.innerHTML = plannedPrep.length
+    ? plannedPrep
+        .slice(0, 8)
+        .map(
+          (item) => `
+            <article class="prep-mini-card">
+              <span>${escapeHtml(getPrepTypeLabel(item.type))}</span>
+              <strong>${escapeHtml(item.title)}</strong>
+              ${item.notes ? `<small>${escapeHtml(item.notes)}</small>` : ""}
+            </article>
+          `,
+        )
+        .join("")
+    : `<div class="empty-state">No prep planned for this session yet.</div>`;
+}
+
+function renderSessionPrep() {
+  if (!elements.prepForm) return;
+  const campaign = getActiveCampaign();
+  const session = getCurrentSession();
+  const campaignPrep = getCampaignPrepItems(state.currentCampaignId);
+
+  elements.prepContext.textContent = campaign
+    ? `Prep for ${campaign.name}${session ? `, with ${getSessionLabel(session, getSessionIndex(session))} selected.` : "."}`
+    : "Create or select a campaign before planning session prep.";
+  elements.prepForm.querySelectorAll("input, select, textarea, button").forEach((field) => {
+    if (field.id !== "cancel-prep-edit") field.disabled = !campaign;
+  });
+  elements.prepPlannedSession.disabled = !campaign || !session;
+  elements.prepPlannedNote.textContent = session
+    ? `Attach this prep item to ${getSessionLabel(session, getSessionIndex(session))}.`
+    : "Select a session to use this.";
+  elements.prepCount.textContent = `${campaignPrep.length} saved`;
+  elements.prepEmpty.classList.toggle("hidden", campaignPrep.length > 0);
+
+  elements.prepList.innerHTML = PREP_TYPES.map(([type, label]) => {
+    const items = campaignPrep.filter((item) => item.type === type);
+    if (!items.length) return "";
+    return `
+      <section class="prep-section">
+        <div class="panel-title-row">
+          <h4>${label}</h4>
+          <span class="count-pill">${items.length}</span>
+        </div>
+        <div class="prep-card-list">
+          ${items.map(renderPrepCard).join("")}
+        </div>
+      </section>
+    `;
+  }).join("");
+}
+
+function renderPrepCard(item) {
+  const plannedSession = state.sessions.find((session) => session.id === item.plannedSessionId);
+  const plannedText = plannedSession
+    ? `Planned for ${getSessionLabel(plannedSession, getSessionIndex(plannedSession))}`
+    : "Not assigned to a session";
+  return `
+    <article class="prep-card ${item.status !== "active" ? "muted-card" : ""}">
+      <div>
+        <div class="prep-card-heading">
+          <strong>${escapeHtml(item.title)}</strong>
+          <span class="count-pill">${escapeHtml(formatStatus(item.status))}</span>
+        </div>
+        <small>${escapeHtml(plannedText)}</small>
+        ${item.notes ? `<p>${escapeHtml(item.notes)}</p>` : ""}
+      </div>
+      <div class="card-actions">
+        <button class="icon-button" type="button" data-use-prep="${item.id}">${item.status === "used" ? "Active" : "Used"}</button>
+        <button class="icon-button" type="button" data-edit-prep="${item.id}">Edit</button>
+        <button class="icon-button delete-button" type="button" data-delete-prep="${item.id}">Del</button>
+      </div>
+    </article>
+  `;
 }
 
 function renderRoster() {
@@ -1485,6 +1621,21 @@ function getCurrentSession() {
   return state.sessions.find((session) => session.id === state.currentSessionId) || null;
 }
 
+function getCampaignPrepItems(campaignId) {
+  if (!campaignId) return [];
+  return state.prepItems
+    .filter((item) => item.campaignId === campaignId)
+    .sort((a, b) => (a.status === b.status ? (a.createdAt || 0) - (b.createdAt || 0) : a.status.localeCompare(b.status)));
+}
+
+function getCurrentSessionPrep() {
+  const session = getCurrentSession();
+  if (!session) return [];
+  return getCampaignPrepItems(session.campaignId).filter(
+    (item) => item.status === "active" && item.plannedSessionId === session.id,
+  );
+}
+
 function getCampaignSessions(targetState, campaignId) {
   if (!campaignId) return [];
   return targetState.sessions
@@ -1503,6 +1654,10 @@ function getCompletedBattleResults() {
 function getCampaignDms(campaign) {
   const ids = campaign?.dmIds?.length ? campaign.dmIds : state.dms.map((dm) => dm.id);
   return ids.map((id) => state.dms.find((dm) => dm.id === id)).filter(Boolean);
+}
+
+function getPrepTypeLabel(type) {
+  return PREP_TYPES.find(([value]) => value === type)?.[1] || "Prep";
 }
 
 function buildBattleSummaryMarkdown(battle) {
@@ -1861,6 +2016,16 @@ function getCurrentRecapDraft() {
   };
 }
 
+function resetPrepForm(clearMessage = true) {
+  elements.prepForm.reset();
+  elements.prepId.value = "";
+  elements.prepForm.dataset.createdAt = "";
+  elements.prepFormTitle.textContent = "Add prep item";
+  elements.prepStatus.value = "active";
+  elements.cancelPrepEdit.classList.add("hidden");
+  if (clearMessage) elements.prepMessage.textContent = "";
+}
+
 function updateRecordingDuration() {
   if (!recordingStartedAt) return;
   elements.recordingDuration.textContent = formatDuration((Date.now() - recordingStartedAt) / 1000);
@@ -1902,6 +2067,83 @@ elements.saveControlNote.addEventListener("click", () => {
   elements.controlQuickNote.value = "";
   elements.controlNoteMessage.textContent = "Quick note added to Important Events.";
   render();
+});
+
+elements.prepForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const campaign = getActiveCampaign();
+  if (!campaign) {
+    elements.prepMessage.textContent = "Create or select a campaign before saving prep.";
+    return;
+  }
+  const title = elements.prepTitleField.value.trim();
+  if (!title) {
+    elements.prepMessage.textContent = "Add a name or title first.";
+    return;
+  }
+  const session = getCurrentSession();
+  const item = {
+    id: elements.prepId.value || createId("prep"),
+    campaignId: campaign.id,
+    type: elements.prepType.value,
+    title,
+    notes: elements.prepNotesField.value.trim(),
+    status: elements.prepStatus.value,
+    plannedSessionId: elements.prepPlannedSession.checked && session ? session.id : "",
+    createdAt: Number(elements.prepForm.dataset.createdAt || Date.now()),
+  };
+  const existingIndex = state.prepItems.findIndex((entry) => entry.id === item.id);
+  if (existingIndex >= 0) {
+    state.prepItems[existingIndex] = { ...state.prepItems[existingIndex], ...item };
+    elements.prepMessage.textContent = "Prep item updated.";
+  } else {
+    state.prepItems.push(item);
+    elements.prepMessage.textContent = "Prep item saved.";
+  }
+  resetPrepForm(false);
+  render();
+});
+
+elements.cancelPrepEdit.addEventListener("click", () => {
+  resetPrepForm();
+});
+
+elements.prepList.addEventListener("click", (event) => {
+  const editId = event.target.dataset.editPrep;
+  const deleteId = event.target.dataset.deletePrep;
+  const useId = event.target.dataset.usePrep;
+
+  if (editId) {
+    const item = state.prepItems.find((entry) => entry.id === editId);
+    if (!item) return;
+    elements.prepId.value = item.id;
+    elements.prepType.value = item.type;
+    elements.prepTitleField.value = item.title;
+    elements.prepNotesField.value = item.notes;
+    elements.prepStatus.value = item.status;
+    elements.prepPlannedSession.checked = Boolean(item.plannedSessionId && item.plannedSessionId === state.currentSessionId);
+    elements.prepForm.dataset.createdAt = item.createdAt;
+    elements.prepFormTitle.textContent = "Edit prep item";
+    elements.cancelPrepEdit.classList.remove("hidden");
+    elements.prepMessage.textContent = "Editing prep item.";
+  }
+
+  if (useId) {
+    state.prepItems = state.prepItems.map((item) =>
+      item.id === useId
+        ? { ...item, status: item.status === "used" ? "active" : "used", plannedSessionId: item.status === "used" ? item.plannedSessionId : "" }
+        : item,
+    );
+    elements.prepMessage.textContent = "Prep status updated.";
+    render();
+  }
+
+  if (deleteId) {
+    state.prepItems = state.prepItems.filter((item) => item.id !== deleteId);
+    if (elements.prepId.value === deleteId) resetPrepForm(false);
+    elements.prepMessage.textContent = "Prep item deleted.";
+    render();
+  }
 });
 
 elements.memberForm.addEventListener("submit", (event) => {
@@ -2331,6 +2573,7 @@ elements.campaignList.addEventListener("click", (event) => {
   if (deleteId) {
     state.campaigns = state.campaigns.filter((campaign) => campaign.id !== deleteId);
     state.sessions = state.sessions.filter((session) => session.campaignId !== deleteId);
+    state.prepItems = state.prepItems.filter((item) => item.campaignId !== deleteId);
     if (elements.campaignId.value === deleteId) {
       elements.campaignId.value = "";
       elements.campaignName.value = "";
@@ -2365,6 +2608,9 @@ elements.sessionList.addEventListener("click", (event) => {
   }
   if (deleteId) {
     state.sessions = state.sessions.filter((session) => session.id !== deleteId);
+    state.prepItems = state.prepItems.map((item) =>
+      item.plannedSessionId === deleteId ? { ...item, plannedSessionId: "" } : item,
+    );
     state.campaigns = state.campaigns.map((campaign) => ({
       ...campaign,
       sessionIds: (campaign.sessionIds || []).filter((sessionId) => sessionId !== deleteId),
