@@ -18,6 +18,7 @@
         </button>
         <nav class="nav-tabs" aria-label="Main sections">
           <button class="nav-tab active" data-view="home" type="button">Home</button>
+          <button class="nav-tab" data-view="control" type="button">Control Panel</button>
           <button class="nav-tab" data-view="roster" type="button">Roster</button>
           <button class="nav-tab" data-view="initiative" type="button">Battle</button>
           <button class="nav-tab" data-view="sessions" type="button">Sessions</button>
@@ -57,6 +58,11 @@
           </div>
 
           <div class="feature-grid">
+            <button class="feature-card ready" data-view="control" type="button">
+              <span class="card-kicker">Live DM view</span>
+              <strong>Control Panel</strong>
+              <span>See the current session, battle, recording, AI, and quick notes in one place.</span>
+            </button>
             <button class="feature-card ready" data-view="roster" type="button">
               <span class="card-kicker">Feature 1</span>
               <strong>Member Roster</strong>
@@ -77,6 +83,105 @@
               <strong>Session Progress</strong>
               <span>Write transcripts and recaps now; AI summaries come later.</span>
             </button>
+          </div>
+        </section>
+
+        <section class="view" id="view-control" aria-labelledby="control-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Live DM dashboard</p>
+              <h2 id="control-title">Control Panel</h2>
+            </div>
+            <p>Run the table from one place, then jump into the full tools when you need more detail.</p>
+          </div>
+
+          <div class="control-grid">
+            <div class="panel control-card control-card-primary">
+              <div class="panel-title-row">
+                <h3>Current session</h3>
+                <span class="count-pill" id="control-session-pill">No session</span>
+              </div>
+              <div class="control-status-list">
+                <div class="recording-status">
+                  <span>Campaign</span>
+                  <strong id="control-campaign">No active campaign</strong>
+                </div>
+                <div class="recording-status">
+                  <span>Session</span>
+                  <strong id="control-session">No session selected</strong>
+                </div>
+              </div>
+              <div class="button-row compact">
+                <button class="secondary-button" data-view="sessions" type="button">Open Sessions</button>
+                <button class="ghost-button" data-view="initiative" type="button">Open Battle</button>
+                <button class="ghost-button" data-view="speaking" type="button">Speaking Time</button>
+                <button class="ghost-button" data-view="progress" type="button">Session Notes</button>
+              </div>
+            </div>
+
+            <div class="panel control-card">
+              <div class="panel-title-row">
+                <h3>Battle</h3>
+                <span class="count-pill" id="control-battle-count">0 saved</span>
+              </div>
+              <strong class="control-big-status" id="control-battle-status">No battle prepared</strong>
+              <p class="form-note" id="control-battle-detail">Use Battle to select combatants, roll initiative, and save results.</p>
+              <button class="secondary-button" data-view="initiative" type="button">Open Battle</button>
+            </div>
+
+            <div class="panel control-card">
+              <div class="panel-title-row">
+                <h3>Recording</h3>
+                <span class="count-pill" id="control-recording-status">No recording</span>
+              </div>
+              <p class="form-note" id="control-recording-detail">Record audio and process speaking time from the Speaking Time screen.</p>
+              <div class="control-status-list">
+                <div class="recording-status">
+                  <span>Speaker review</span>
+                  <strong id="control-speaker-status">Manual</strong>
+                </div>
+                <div class="recording-status">
+                  <span>Transcript</span>
+                  <strong id="control-transcript-status">No transcript</strong>
+                </div>
+              </div>
+              <button class="secondary-button" data-view="speaking" type="button">Open Speaking Time</button>
+            </div>
+
+            <div class="panel control-card">
+              <div class="panel-title-row">
+                <h3>AI setup</h3>
+                <span class="count-pill" id="control-ai-status">Not checked</span>
+              </div>
+              <p class="form-note" id="control-ai-detail">Check AI setup from Session Notes before generating recaps or speaker timing.</p>
+              <button class="secondary-button" data-view="progress" type="button">Open Session Notes</button>
+            </div>
+
+            <div class="panel control-card control-card-wide">
+              <div class="panel-title-row">
+                <h3>Quick session note</h3>
+                <span class="count-pill">Important Events</span>
+              </div>
+              <p class="form-note">Add a quick note during the game. It will appear in Session Notes under Important Events.</p>
+              <label>
+                Note
+                <textarea id="control-quick-note" rows="4" placeholder="Example: The party found the moonlit key."></textarea>
+              </label>
+              <div class="button-row compact">
+                <button class="primary-button" id="save-control-note" type="button">Add to important events</button>
+                <button class="ghost-button" data-view="progress" type="button">Open Session Notes</button>
+              </div>
+              <p class="form-note" id="control-note-message"></p>
+            </div>
+
+            <div class="panel control-card">
+              <div class="panel-title-row">
+                <h3>Backup</h3>
+                <span class="count-pill" id="control-backup-status">Local data</span>
+              </div>
+              <p class="form-note" id="control-backup-detail">Backups move campaigns, sessions, notes, battles, and speaking stats between devices. Audio files stay separate.</p>
+              <button class="secondary-button" data-view="sessions" type="button">Open Backup & Transfer</button>
+            </div>
           </div>
         </section>
 

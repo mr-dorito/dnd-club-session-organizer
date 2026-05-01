@@ -229,7 +229,7 @@ h3 {
 
 .feature-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 14px;
   margin-top: 16px;
 }
@@ -339,6 +339,39 @@ h3 {
 .session-strip strong {
   color: var(--cream);
   font-size: 1.05rem;
+}
+
+.control-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.control-card {
+  display: grid;
+  gap: 14px;
+}
+
+.control-card-primary,
+.control-card-wide {
+  grid-column: span 2;
+}
+
+.control-status-list {
+  display: grid;
+  gap: 10px;
+}
+
+.control-big-status {
+  display: block;
+  color: var(--gold);
+  font-size: 1.5rem;
+  line-height: 1.15;
+}
+
+.control-card textarea {
+  min-height: 108px;
 }
 
 .form-panel,
@@ -1201,7 +1234,8 @@ textarea {
   .roster-layout,
   .initiative-layout,
   .feature-grid,
-  .progress-layout {
+  .progress-layout,
+  .control-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1214,6 +1248,11 @@ textarea {
   }
 
   .wide-panel {
+    grid-column: auto;
+  }
+
+  .control-card-primary,
+  .control-card-wide {
     grid-column: auto;
   }
 

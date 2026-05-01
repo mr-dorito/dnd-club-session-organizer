@@ -60,6 +60,23 @@ const elements = {
   heroDmCount: document.querySelector("#hero-dm-count"),
   heroCampaignName: document.querySelector("#hero-campaign-name"),
   heroSessionCount: document.querySelector("#hero-session-count"),
+  controlSessionPill: document.querySelector("#control-session-pill"),
+  controlCampaign: document.querySelector("#control-campaign"),
+  controlSession: document.querySelector("#control-session"),
+  controlBattleCount: document.querySelector("#control-battle-count"),
+  controlBattleStatus: document.querySelector("#control-battle-status"),
+  controlBattleDetail: document.querySelector("#control-battle-detail"),
+  controlRecordingStatus: document.querySelector("#control-recording-status"),
+  controlRecordingDetail: document.querySelector("#control-recording-detail"),
+  controlSpeakerStatus: document.querySelector("#control-speaker-status"),
+  controlTranscriptStatus: document.querySelector("#control-transcript-status"),
+  controlAiStatus: document.querySelector("#control-ai-status"),
+  controlAiDetail: document.querySelector("#control-ai-detail"),
+  controlQuickNote: document.querySelector("#control-quick-note"),
+  saveControlNote: document.querySelector("#save-control-note"),
+  controlNoteMessage: document.querySelector("#control-note-message"),
+  controlBackupStatus: document.querySelector("#control-backup-status"),
+  controlBackupDetail: document.querySelector("#control-backup-detail"),
   memberForm: document.querySelector("#member-form"),
   memberFormTitle: document.querySelector("#member-form-title"),
   memberId: document.querySelector("#member-id"),
@@ -436,6 +453,7 @@ function showView(viewName) {
 
 function render() {
   renderHome();
+  renderControlPanel();
   renderSessionStrips();
   renderRoster();
   renderDms();
@@ -471,6 +489,72 @@ function renderHome() {
   elements.heroDmCount.textContent = state.dms.length;
   elements.heroCampaignName.textContent = activeCampaign?.name || "No campaign";
   elements.heroSessionCount.textContent = activeSessions.length;
+}
+
+function renderControlPanel() {
+  if (!elements.controlCampaign) return;
+  const campaign = getActiveCampaign();
+  const session = getCurrentSession();
+  const sessionLabel = session ? getSessionLabel(session, getSessionIndex(session)) : "No session selected";
+  const completedBattles = getCompletedBattleResults();
+  const currentCombatant = state.combat.combatants[state.combat.activeIndex];
+  const setup = state.settings.aiSetup || clone(initialState.settings.aiSetup);
+  const transcriptReady = Boolean(session?.transcript?.trim());
+  const recapReady = Boolean(session?.recap?.summary?.trim());
+  const audioStatus = getAudioProcessingStatus(session);
+
+  elements.controlSessionPill.textContent = session ? "Ready" : "Needs session";
+  elements.controlCampaign.textContent = campaign?.name || "No active campaign";
+  elements.controlSession.textContent = sessionLabel;
+
+  elements.controlBattleCount.textContent = `${completedBattles.length} saved`;
+  if (state.combat.battleRunning && currentCombatant) {
+    elements.controlBattleStatus.textContent = `${currentCombatant.displayName}'s turn`;
+    elements.controlBattleDetail.textContent = `Battle is running with ${state.combat.combatants.length} combatants.`;
+  } else if (state.combat.sorted && state.combat.combatants.length) {
+    elements.controlBattleStatus.textContent = "Battle ready";
+    elements.controlBattleDetail.textContent = "Turn order is sorted. Open Battle to start or continue.";
+  } else if (state.combat.combatants.length) {
+    elements.controlBattleStatus.textContent = "Battle setup started";
+    elements.controlBattleDetail.textContent = "Add initiative rolls or auto-roll before starting.";
+  } else {
+    elements.controlBattleStatus.textContent = "No battle prepared";
+    elements.controlBattleDetail.textContent = "Use Battle to select combatants, roll initiative, and save results.";
+  }
+
+  elements.controlRecordingStatus.textContent = audioStatus;
+  elements.controlRecordingDetail.textContent = session
+    ? `Recording file: ${session.recording?.fileName || "No file yet"}`
+    : "Select or create a session before recording audio.";
+  elements.controlSpeakerStatus.textContent = formatStatus(session?.speakerReviewStatus || "manual");
+  elements.controlTranscriptStatus.textContent = transcriptReady ? "Saved" : "No transcript";
+
+  if (state.settings.manualMode) {
+    elements.controlAiStatus.textContent = "Manual Mode";
+    elements.controlAiDetail.textContent = "Manual Mode is on. Turn it off in Session Notes when you want AI tools.";
+  } else if (setup.backendReachable && setup.hasOpenAIKey) {
+    elements.controlAiStatus.textContent = transcriptReady ? "Ready" : "Needs transcript";
+    elements.controlAiDetail.textContent = recapReady
+      ? "AI is connected and this session has a recap saved."
+      : "AI is connected. Add a transcript to generate a recap.";
+  } else if (setup.backendReachable === false) {
+    elements.controlAiStatus.textContent = "Unreachable";
+    elements.controlAiDetail.textContent = setup.message || "The backend could not be reached. Check AI setup in Session Notes.";
+  } else {
+    elements.controlAiStatus.textContent = "Not checked";
+    elements.controlAiDetail.textContent = "Run Check AI setup from Session Notes before using AI tools.";
+  }
+
+  elements.controlQuickNote.disabled = !session;
+  elements.saveControlNote.disabled = !session;
+  if (!session && !elements.controlNoteMessage.textContent) {
+    elements.controlNoteMessage.textContent = "Create or select a session before adding quick notes.";
+  } else if (session && elements.controlNoteMessage.textContent === "Create or select a session before adding quick notes.") {
+    elements.controlNoteMessage.textContent = "";
+  }
+
+  elements.controlBackupStatus.textContent = `${state.campaigns.length} campaigns`;
+  elements.controlBackupDetail.textContent = `${state.sessions.length} sessions, ${state.members.length} characters, and ${state.dms.length} DMs are saved in this browser. Audio files stay separate.`;
 }
 
 function renderRoster() {
@@ -1795,6 +1879,29 @@ function getAudioExtension(mimeType) {
 
 elements.navButtons.forEach((button) => {
   button.addEventListener("click", () => showView(button.dataset.view));
+});
+
+elements.saveControlNote.addEventListener("click", () => {
+  const session = getCurrentSession();
+  if (!session) {
+    elements.controlNoteMessage.textContent = "Create or select a session before adding quick notes.";
+    return;
+  }
+  const note = elements.controlQuickNote.value.trim();
+  if (!note) {
+    elements.controlNoteMessage.textContent = "Write a note first.";
+    return;
+  }
+  const time = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const recap = normalizeRecap(session.recap);
+  const nextNote = `Quick note (${time}): ${note}`;
+  session.recap = {
+    ...recap,
+    events: recap.events ? `${recap.events}\n${nextNote}` : nextNote,
+  };
+  elements.controlQuickNote.value = "";
+  elements.controlNoteMessage.textContent = "Quick note added to Important Events.";
+  render();
 });
 
 elements.memberForm.addEventListener("submit", (event) => {
