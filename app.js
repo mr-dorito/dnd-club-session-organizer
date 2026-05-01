@@ -141,6 +141,9 @@ const elements = {
   sessionCount: document.querySelector("#session-count"),
   sessionsEmpty: document.querySelector("#sessions-empty"),
   sessionList: document.querySelector("#session-list"),
+  exportBackup: document.querySelector("#export-backup"),
+  importBackupFile: document.querySelector("#import-backup-file"),
+  backupMessage: document.querySelector("#backup-message"),
   speakingSessionContext: document.querySelector("#speaking-session-context"),
   recordingStatus: document.querySelector("#recording-status"),
   recordingDuration: document.querySelector("#recording-duration"),
@@ -1495,7 +1498,11 @@ function buildCampaignMarkdown(campaign) {
 }
 
 function downloadTextFile(fileName, content) {
-  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+  downloadFile(fileName, content, "text/markdown;charset=utf-8");
+}
+
+function downloadFile(fileName, content, type) {
+  const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -1504,6 +1511,27 @@ function downloadTextFile(fileName, content) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function buildBackupPayload() {
+  return {
+    app: "dnd-club-session-organizer",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    note: "Audio recordings are not stored in this backup. Keep downloaded audio files separately.",
+    state: mergeState(clone(state)),
+  };
+}
+
+function validateBackupPayload(payload) {
+  if (payload?.app !== "dnd-club-session-organizer" || !payload.state) {
+    throw new Error("That file does not look like a D&D Club Organizer backup.");
+  }
+  const nextState = mergeState(payload.state);
+  if (!Array.isArray(nextState.members) || !Array.isArray(nextState.sessions) || !Array.isArray(nextState.campaigns)) {
+    throw new Error("The backup is missing required app data.");
+  }
+  return nextState;
 }
 
 function slugifyFileName(value) {
@@ -2238,6 +2266,40 @@ elements.sessionList.addEventListener("click", (event) => {
       state.currentSessionId = getCampaignSessions(state, state.currentCampaignId)[0]?.id || null;
     }
     render();
+  }
+});
+
+elements.exportBackup.addEventListener("click", () => {
+  const payload = buildBackupPayload();
+  const date = new Date().toISOString().slice(0, 10);
+  downloadFile(`dnd-club-backup-${date}.json`, JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
+  elements.backupMessage.textContent = "Backup exported. Keep audio recordings as separate files.";
+});
+
+elements.importBackupFile.addEventListener("change", async () => {
+  const file = elements.importBackupFile.files?.[0];
+  if (!file) return;
+
+  try {
+    const payload = JSON.parse(await file.text());
+    const nextState = validateBackupPayload(payload);
+    const confirmed = window.confirm(
+      "Importing this backup will replace the campaigns, sessions, roster, notes, and settings in this browser. Continue?",
+    );
+    if (!confirmed) {
+      elements.backupMessage.textContent = "Import canceled. Existing data was kept.";
+      elements.importBackupFile.value = "";
+      return;
+    }
+
+    state = nextState;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    elements.backupMessage.textContent = "Backup imported. This browser now has the imported app data.";
+    elements.importBackupFile.value = "";
+    render();
+  } catch (error) {
+    elements.backupMessage.textContent = error.message || "Could not import that backup file.";
+    elements.importBackupFile.value = "";
   }
 });
 

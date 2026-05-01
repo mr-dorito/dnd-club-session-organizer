@@ -305,6 +305,23 @@
               </div>
               <div class="session-list" id="session-list"></div>
             </div>
+
+            <div class="panel wide-panel form-panel">
+              <div class="panel-title-row">
+                <h3>Backup & Transfer</h3>
+                <span class="count-pill">Local file</span>
+              </div>
+              <p class="form-note">Backups move data between devices. Audio recordings are not stored in backups.</p>
+              <div class="button-row compact">
+                <button class="secondary-button" id="export-backup" type="button">Export backup</button>
+                <label class="file-button">
+                  Import backup
+                  <input id="import-backup-file" type="file" accept=".json,application/json" />
+                </label>
+              </div>
+              <p class="form-note">Importing replaces the data in this browser.</p>
+              <p class="form-note" id="backup-message"></p>
+            </div>
           </div>
         </section>
 

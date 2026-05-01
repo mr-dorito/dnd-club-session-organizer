@@ -541,6 +541,26 @@ textarea {
   text-decoration: none;
 }
 
+.file-button {
+  display: inline-flex;
+  min-height: 42px;
+  width: auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  padding: 9px 14px;
+  color: #fff8e6;
+  background: rgba(57, 94, 114, 0.92);
+  font-family: "Georgia", serif;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.file-button input {
+  display: none;
+}
+
 .recording-status,
 .ai-setup-row,
 .speaker-row,
